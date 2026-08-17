@@ -1,0 +1,179 @@
+'use client'
+
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { handFrame } from '@/core/hands/handFrame'
+import { useGestureStore } from '@/core/store/useGestureStore'
+import { damp } from '@/lib/math'
+import { handToWorld } from './projection'
+
+/**
+ * Hand cursors and their trails.
+ *
+ * The single most important piece of feedback in the whole interface: without a
+ * visible cursor, tracking that is working and tracking that has silently
+ * failed look identical, and the user is left waving at a screen wondering
+ * which. The cursor also has to communicate *gesture state* — a pinch has to
+ * look different from an open hand before the pinch does anything.
+ *
+ * Reads `handFrame` directly rather than subscribing to a store: this updates
+ * every frame, which is exactly what the render loop is for.
+ */
+
+const TRAIL_LENGTH = 22
+
+interface CursorProps {
+  handedness: 'left' | 'right'
+  color: string
+}
+
+function Cursor({ handedness, color }: CursorProps) {
+  const camera = useThree((s) => s.camera)
+  const group = useRef<THREE.Group>(null)
+  const core = useRef<THREE.Mesh>(null)
+  const ring = useRef<THREE.Mesh>(null)
+  const coreMat = useRef<THREE.MeshBasicMaterial>(null)
+  const ringMat = useRef<THREE.MeshBasicMaterial>(null)
+
+  const target = useMemo(() => new THREE.Vector3(), [])
+  const trailPositions = useMemo(() => new Float32Array(TRAIL_LENGTH * 3), [])
+
+  // Built imperatively rather than as `<line>` JSX: React's intrinsic-element
+  // namespace resolves `line` to the SVG element, not three's, so the JSX form
+  // fails to typecheck. A primitive sidesteps the collision entirely.
+  const trailLine = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3))
+    const mat = new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.35,
+      toneMapped: false,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    const line = new THREE.Line(geo, mat)
+    line.frustumCulled = false
+    return line
+  }, [trailPositions, color])
+
+  useEffect(() => {
+    const line = trailLine
+    return () => {
+      line.geometry.dispose()
+      ;(line.material as THREE.Material).dispose()
+    }
+  }, [trailLine])
+
+  useFrame((state, delta) => {
+    const hand = handFrame[handedness]
+    const g = group.current
+    if (!g) return
+    const dt = Math.min(delta, 0.1)
+
+    // Fade the whole cursor out rather than hiding it: a cursor that blinks out
+    // of existence on a dropped frame reads as a glitch.
+    const targetScale = hand.visible ? 1 : 0
+    g.scale.setScalar(damp(g.scale.x, targetScale, 12, dt))
+    if (g.scale.x < 0.01) {
+      g.visible = false
+      return
+    }
+    g.visible = true
+
+    if (hand.visible) {
+      handToWorld(target, camera, hand.position.x, hand.position.y, hand.position.z)
+      // Light smoothing on top of the One Euro filter: the filter tames sensor
+      // jitter, this absorbs the discrete jumps between inference frames, which
+      // arrive slower than the render loop.
+      g.position.x = damp(g.position.x, target.x, 22, dt)
+      g.position.y = damp(g.position.y, target.y, 22, dt)
+      g.position.z = damp(g.position.z, target.z, 22, dt)
+    }
+
+    // Pinch closes the ring and brightens the core — visible *before* the
+    // threshold trips, so the gesture is discoverable rather than binary.
+    const pinch = hand.pinch
+    if (ring.current) {
+      const s = 1 - pinch * 0.55
+      ring.current.scale.setScalar(damp(ring.current.scale.x, s, 18, dt))
+      ring.current.rotation.z += dt * (0.4 + pinch * 3)
+    }
+    if (coreMat.current) {
+      coreMat.current.opacity = damp(coreMat.current.opacity, 0.5 + pinch * 0.5, 14, dt)
+    }
+    if (ringMat.current) {
+      const active = hand.gesture !== 'idle'
+      ringMat.current.opacity = damp(ringMat.current.opacity, active ? 0.9 : 0.35, 14, dt)
+    }
+    if (core.current) {
+      const s = 1 + pinch * 0.6 + (hand.gesture === 'grab' ? 0.4 : 0)
+      core.current.scale.setScalar(damp(core.current.scale.x, s, 16, dt))
+    }
+
+    // ── Trail ────────────────────────────────────────────────────────────────
+    // Shift the buffer down one vertex and write the head. Cheap, and it gives
+    // fast movement a motion streak that makes tracking latency read as
+    // deliberate rather than laggy.
+    if (hand.visible) {
+      trailPositions.copyWithin(0, 3)
+      trailPositions[(TRAIL_LENGTH - 1) * 3] = g.position.x
+      trailPositions[(TRAIL_LENGTH - 1) * 3 + 1] = g.position.y
+      trailPositions[(TRAIL_LENGTH - 1) * 3 + 2] = g.position.z
+      trailLine.geometry.attributes.position!.needsUpdate = true
+    }
+    void state
+  })
+
+  return (
+    <>
+      <group ref={group}>
+        <mesh ref={core}>
+          <sphereGeometry args={[0.055, 16, 16]} />
+          <meshBasicMaterial
+            ref={coreMat}
+            color={color}
+            transparent
+            opacity={0.6}
+            toneMapped={false}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+
+        {/* Billboarded so the ring always presents face-on to the viewer. */}
+        <mesh ref={ring} quaternion={camera.quaternion}>
+          <ringGeometry args={[0.13, 0.145, 48]} />
+          <meshBasicMaterial
+            ref={ringMat}
+            color={color}
+            transparent
+            opacity={0.35}
+            side={THREE.DoubleSide}
+            toneMapped={false}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
+
+      {/* Trail lives outside the cursor group: its vertices are already in
+          world space, so inheriting the group's transform would apply the
+          position twice. */}
+      <primitive object={trailLine} />
+    </>
+  )
+}
+
+export function HandCursors() {
+  const inputMode = useGestureStore((s) => s.inputMode)
+  if (inputMode !== 'hand') return null
+
+  return (
+    <>
+      <Cursor handedness="left" color="#7c9cff" />
+      <Cursor handedness="right" color="#d6e4ff" />
+    </>
+  )
+}

@@ -17,6 +17,8 @@ export interface DeviceProfile {
   memoryGB: number | null
   prefersReducedMotion: boolean
   supportsWebGL2: boolean
+  /** Tier was pinned via `?quality=`; the runtime governor must not override it. */
+  pinned: boolean
 }
 
 let cached: DeviceProfile | null = null
@@ -32,10 +34,17 @@ export function getDeviceProfile(): DeviceProfile {
       memoryGB: null,
       prefersReducedMotion: false,
       supportsWebGL2: true,
+      pinned: false,
     }
   }
 
   const renderer = probeRenderer()
+  // `?quality=low|medium|high` pins the tier. Useful for eyeballing how the
+  // interface degrades without hunting for a weaker machine, and it lets the
+  // test suite hold quality constant instead of racing the governor.
+  const override = new URLSearchParams(window.location.search).get('quality')
+  const forced =
+    override === 'low' || override === 'medium' || override === 'high' ? override : null
   const isMobile =
     /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) ||
     // iPadOS reports as desktop Safari; touch points give it away.
@@ -46,13 +55,14 @@ export function getDeviceProfile(): DeviceProfile {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   cached = {
-    tier: pickTier({ renderer, isMobile, cores, memoryGB }),
+    tier: forced ?? pickTier({ renderer, isMobile, cores, memoryGB }),
     renderer,
     isMobile,
     cores,
     memoryGB,
     prefersReducedMotion,
     supportsWebGL2: renderer !== 'unavailable',
+    pinned: forced !== null,
   }
   return cached
 }

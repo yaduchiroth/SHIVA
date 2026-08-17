@@ -26,12 +26,19 @@ interface SystemState {
   frameMs: number
   renderer: string
   reducedMotion: boolean
+  /** Tier pinned via `?quality=` — the governor stands down. */
+  pinned: boolean
   telemetry: TelemetrySnapshot | null
   telemetryError: string | null
 
   setBoot: (boot: BootPhase) => void
   setTier: (tier: QualityTier) => void
-  initDevice: (p: { tier: QualityTier; renderer: string; reducedMotion: boolean }) => void
+  initDevice: (p: {
+    tier: QualityTier
+    renderer: string
+    reducedMotion: boolean
+    pinned: boolean
+  }) => void
   setPerf: (fps: number, frameMs: number) => void
   setTelemetry: (t: TelemetrySnapshot | null, error?: string | null) => void
 }
@@ -44,13 +51,14 @@ export const useSystemStore = create<SystemState>((set) => ({
   frameMs: 0,
   renderer: 'unknown',
   reducedMotion: false,
+  pinned: false,
   telemetry: null,
   telemetryError: null,
 
   setBoot: (boot) => set({ boot }),
   setTier: (tier) => set({ tier }),
-  initDevice: ({ tier, renderer, reducedMotion }) =>
-    set({ tier, baseTier: tier, renderer, reducedMotion }),
+  initDevice: ({ tier, renderer, reducedMotion, pinned }) =>
+    set({ tier, baseTier: tier, renderer, reducedMotion, pinned }),
   // Called from the render loop, but throttled to ~2 Hz by the caller — this is
   // the one place we accept store writes near frame rate, and only because the
   // HUD genuinely has to display it.
