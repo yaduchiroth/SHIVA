@@ -180,6 +180,10 @@ can't. Panels whose data source arrives in a later phase are labelled as such on
 their face, and the brain's system prompt names them as unconnected so the model
 declines rather than invents.
 
+For a file-by-file account of what exists, why each threshold has the value it
+has, and which parts lift cleanly into another codebase, see
+[`INTEGRATION.md`](./INTEGRATION.md).
+
 **Gesture thresholds are measured, not guessed.** `tests/handPose.ts` generates
 anatomically proportioned landmarks and `calibrate.spec.ts` prints what the
 recognizer derives from each. Two gestures shipped broken in Phase 1 because the
