@@ -1,4 +1,4 @@
-import type { Brain, BrainEvent, BrainRequest, Message, ToolDefinition } from './types'
+import type { Brain, BrainEvent, BrainRequest, BrainStatus, Message, ToolDefinition } from './types'
 import { SseFramer, sseData } from '@/lib/sse'
 
 /**
@@ -191,6 +191,51 @@ function* parseFrames(frames: string[]): Generator<BrainEvent> {
   }
 }
 
+/**
+ * Pulls the human-readable sentence out of a Google error body.
+ *
+ * This replaced `body.slice(0, 180)`, which was worse than it looks. Google
+ * wraps its message in ~40 characters of JSON envelope, and puts the sentence
+ * naming the fix — "Enable it by visiting https://..." — at the END. So
+ * truncating at a fixed length reliably delivered the part that identifies the
+ * error and discarded the part that resolves it.
+ */
+function extractGoogleMessage(body: string): string {
+  if (!body) return '(no detail)'
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string; status?: string } }
+    const message = parsed.error?.message
+    if (message) {
+      const status = parsed.error?.status
+      // The symbolic status (PERMISSION_DENIED, INVALID_ARGUMENT) is the part
+      // that is actually searchable, so keep it alongside the prose.
+      return status ? `${message} [${status}]` : message
+    }
+  } catch {
+    /* not JSON — fall through to the raw body */
+  }
+  return body.slice(0, 400)
+}
+
+/**
+ * Narrows a model listing to things worth suggesting.
+ *
+ * The raw list runs to fifty entries and includes embeddings, video, speech,
+ * robotics and image models — none of which can serve a chat turn. Returning it
+ * whole would put a kilobyte of noise in a probe response and offer the user a
+ * "suggestion" they have to filter themselves.
+ */
+function suggestable(available: string[]): string[] {
+  const EXCLUDE = /image|tts|audio|embedding|live|veo|lyria|robotics|computer-use|aqa|gemma/
+  return available.filter((name) => /^gemini-/.test(name) && !EXCLUDE.test(name)).slice(0, 6)
+}
+
+/** Same extraction, for a Response whose body has not been read yet. */
+async function readGoogleError(response: Response): Promise<string> {
+  const body = await response.text().catch(() => '')
+  return `${extractGoogleMessage(body)} (HTTP ${response.status})`
+}
+
 export class GeminiBrain implements Brain {
   readonly id = 'gemini'
 
@@ -203,9 +248,58 @@ export class GeminiBrain implements Brain {
     private readonly apiKey: string | undefined = process.env.GEMINI_API_KEY,
   ) {}
 
-  /** Whether this brain can run at all, for capability checks in the UI. */
+  /**
+   * Whether a key is present. NOT whether it works.
+   *
+   * Kept because the streaming path genuinely needs the cheap check, but it is
+   * no longer reported to the UI as readiness — that was the bug. See
+   * `verify()`, and `BrainStatus` for why a boolean was never enough.
+   */
   get configured(): boolean {
     return Boolean(this.apiKey)
+  }
+
+  /**
+   * Asks Google whether this key and model actually work.
+   *
+   * Listing models is the right probe: free, read-only, spends no quota, and it
+   * separates the three failures a boolean conflated. It costs one round trip
+   * on page load, which is why the route caches it.
+   */
+  async verify(): Promise<BrainStatus> {
+    if (!this.apiKey) return { status: 'no-key' }
+
+    let response: Response
+    try {
+      response = await fetch(ENDPOINT, {
+        headers: { 'x-goog-api-key': this.apiKey },
+        signal: AbortSignal.timeout(8000),
+      })
+    } catch (err) {
+      // Unreachable is NOT a bad key. Reporting it as one sends someone off to
+      // rotate a credential that was never the problem.
+      return { status: 'unreachable', detail: (err as Error).message }
+    }
+
+    if (!response.ok) {
+      return { status: 'rejected', detail: await readGoogleError(response) }
+    }
+
+    const body = (await response.json().catch(() => null)) as {
+      models?: { name?: string }[]
+    } | null
+
+    const available = (body?.models ?? [])
+      .map((m) => String(m.name ?? '').replace(/^models\//, ''))
+      .filter(Boolean)
+
+    if (!available.includes(this.model)) {
+      // The failure that already happened once: a pinned model was retired and
+      // every request 404'd in a way that read like a bad key.
+      return { status: 'model-missing', model: this.model, available: suggestable(available) }
+    }
+
+    return { status: 'ready', model: this.model }
   }
 
   async *stream(request: BrainRequest): AsyncIterable<BrainEvent> {
@@ -289,7 +383,7 @@ export class GeminiBrain implements Brain {
             // user's fault and not fixable by them. Every fallback was tried.
             'Every Gemini model is rate-limited or busy right now. This is a quota' +
             ' limit on the key, not a fault — try again shortly.'
-          : `Gemini returned ${lastStatus}. ${lastDetail.slice(0, 180)}`,
+          : `Gemini returned ${lastStatus}. ${extractGoogleMessage(lastDetail)}`,
       }
       return
     }

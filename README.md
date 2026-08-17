@@ -40,12 +40,35 @@ Two things worth knowing on first run:
 
 ### If something looks wrong
 
-| Symptom                              | Cause                                                                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Everything is a black rectangle      | WebGL unavailable or blocked. SHIVA detects this and says so instead of showing a blank page — check hardware acceleration is on. |
-| Runs, but sluggish                   | The tier auto-selected too high. Force it down with `?quality=low`.                                                               |
-| "Camera requires HTTPS or localhost" | You're on a plain LAN IP. `getUserMedia` refuses insecure origins — see below.                                                    |
-| "Hand tracking model failed to load" | The `postinstall` download didn't complete. Run `npm run assets`.                                                                 |
+| Symptom                                 | Cause                                                                                                                             |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Everything is a black rectangle         | WebGL unavailable or blocked. SHIVA detects this and says so instead of showing a blank page — check hardware acceleration is on. |
+| Runs, but sluggish                      | The tier auto-selected too high. Force it down with `?quality=low`.                                                               |
+| "Camera requires HTTPS or localhost"    | You're on a plain LAN IP. `getUserMedia` refuses insecure origins — see below.                                                    |
+| "Hand tracking model failed to load"    | The `postinstall` download didn't complete. Run `npm run assets`.                                                                 |
+| Anything about the brain or the API key | Run `npm run doctor` — see below.                                                                                                 |
+
+### `npm run doctor`
+
+One command that says why the brain isn't working, and prints no secrets — the
+whole output is safe to paste to someone. It checks which `.env` files exist,
+parses `.env.local` strictly, and then **actually asks Google** whether the key
+and model work, rather than checking that a string is non-empty and calling that
+configured.
+
+Three things it catches that are invisible otherwise:
+
+- **`.env.local.txt`.** TextEdit appends `.txt` silently and Finder hides
+  dotfiles, so the file you edited may not be the file Next.js reads.
+- **A duplicated `GEMINI_API_KEY`.** `cp .env.example .env.local` leaves an empty
+  one; adding yours at the bottom leaves two, and in the other order the empty
+  one wins and nothing works with no visible cause.
+- **Smart quotes and non-breaking spaces** from a rich-text editor, which cannot
+  even be sent as an HTTP header.
+
+If it reports everything fine and the app still disagrees, **restart
+`npm run dev`** — environment is read once at boot, so editing `.env.local`
+while the server runs may not take effect.
 
 ### Hand tracking
 

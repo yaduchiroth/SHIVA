@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import type { Message } from '@/adapters/brain/types'
+import type { BrainStatus, Message } from '@/adapters/brain/types'
 
 export type BrainPhase =
   | 'idle' // not listening, not thinking
@@ -22,8 +22,15 @@ export type AgentStatus = 'off' | 'connecting' | 'live' | 'error'
 
 interface BrainState {
   phase: BrainPhase
-  /** Whether the server has an API key. Null until probed. */
-  configured: boolean | null
+  /**
+   * What the server actually found when it asked the provider. Null until
+   * probed.
+   *
+   * Was `configured: boolean | null`, which could not distinguish a missing key
+   * from a rejected one from a retired model — three problems with three
+   * different fixes, all shown as "no API key".
+   */
+  brain: BrainStatus | null
   /** Conversation history sent back with each turn. */
   messages: Message[]
   /** The response currently streaming in, assembled from deltas. */
@@ -37,7 +44,7 @@ interface BrainState {
   error: string | null
 
   setPhase: (phase: BrainPhase) => void
-  setConfigured: (configured: boolean) => void
+  setBrainStatus: (status: BrainStatus) => void
   setTranscript: (transcript: string) => void
   setWakeArmed: (armed: boolean) => void
   setAgentStatus: (status: AgentStatus) => void
@@ -65,7 +72,7 @@ const MAX_HISTORY = 20
 
 export const useBrainStore = create<BrainState>((set) => ({
   phase: 'idle',
-  configured: null,
+  brain: null,
   messages: [],
   streaming: '',
   transcript: '',
@@ -74,7 +81,7 @@ export const useBrainStore = create<BrainState>((set) => ({
   error: null,
 
   setPhase: (phase) => set({ phase }),
-  setConfigured: (configured) => set({ configured }),
+  setBrainStatus: (brain) => set({ brain }),
   setTranscript: (transcript) => set({ transcript }),
   setWakeArmed: (wakeArmed) => set({ wakeArmed }),
   setAgentStatus: (agentStatus) => set({ agentStatus }),

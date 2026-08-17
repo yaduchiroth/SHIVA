@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBrainStore } from '@/core/store/useBrainStore'
+import type { BrainStatus } from '@/adapters/brain/types'
 import { useBrain } from '@/brain/useBrain'
 import { useVoice } from '@/brain/useVoice'
 import { useVoiceAgent } from '@/brain/useVoiceAgent'
@@ -27,9 +28,37 @@ import { say } from '@/brain/speech'
  * "SHIVA…", sends one utterance to Gemini, speaks one reply. It costs nothing
  * while idle and works with no Deepgram key, which is why it stays.
  */
+/**
+ * Turns a probe result into a sentence someone can act on.
+ *
+ * The point of each of these being different: they have different fixes. A
+ * missing key is a file on your machine, a rejected key is Google's console, a
+ * retired model is one line of config. All three used to read "No API key — set
+ * GEMINI_API_KEY in .env.local", which is actively misleading for two of them —
+ * and was shown to someone whose key was, at that moment, working.
+ *
+ * @returns the problem, or null when there is nothing to say.
+ */
+function brainProblem(brain: BrainStatus | null): string | null {
+  if (!brain) return null
+  switch (brain.status) {
+    case 'ready':
+      return null
+    case 'no-key':
+      return 'The server got no GEMINI_API_KEY — run `npm run doctor`'
+    case 'rejected':
+      // Google's own words. It names the fix, and paraphrasing loses it.
+      return `Gemini refused the key: ${brain.detail}`
+    case 'model-missing':
+      return `Model "${brain.model}" is not available to this key — set GEMINI_MODEL`
+    case 'unreachable':
+      return `Cannot reach Gemini: ${brain.detail}`
+  }
+}
+
 export function BrainConsole() {
   const phase = useBrainStore((s) => s.phase)
-  const configured = useBrainStore((s) => s.configured)
+  const brain = useBrainStore((s) => s.brain)
   const streaming = useBrainStore((s) => s.streaming)
   const transcript = useBrainStore((s) => s.transcript)
   const wakeArmed = useBrainStore((s) => s.wakeArmed)
@@ -117,20 +146,19 @@ export function BrainConsole() {
 
   const status =
     error ??
+    brainProblem(brain) ??
     (agentStatus === 'connecting'
       ? 'Connecting to voice agent…'
-      : configured === false
-        ? 'No API key — set GEMINI_API_KEY in .env.local'
-        : phase === 'listening'
-          ? transcript ||
-            (agentStatus === 'live' ? 'Listening — just talk' : 'Listening — say "SHIVA…"')
-          : phase === 'thinking'
-            ? 'Thinking'
-            : phase === 'speaking'
-              ? streaming.slice(-70)
-              : wakeArmed
-                ? 'Armed — say "SHIVA…"'
-                : null)
+      : phase === 'listening'
+        ? transcript ||
+          (agentStatus === 'live' ? 'Listening — just talk' : 'Listening — say "SHIVA…"')
+        : phase === 'thinking'
+          ? 'Thinking'
+          : phase === 'speaking'
+            ? streaming.slice(-70)
+            : wakeArmed
+              ? 'Armed — say "SHIVA…"'
+              : null)
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-20 z-20 flex flex-col items-center gap-2">
@@ -178,7 +206,7 @@ export function BrainConsole() {
         <button
           type="button"
           onClick={toggle}
-          disabled={!supported || configured === false}
+          disabled={!supported || brain?.status === 'no-key'}
           className="glass-surface cursor-pointer px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           style={{
             fontSize: 'var(--text-hud)',

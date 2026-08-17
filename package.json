@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "assets": "node scripts/fetch-assets.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "postinstall": "node scripts/fetch-assets.mjs",
     "test": "playwright test",
     "test:headed": "playwright test --headed",

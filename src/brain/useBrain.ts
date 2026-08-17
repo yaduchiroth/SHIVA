@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef } from 'react'
-import type { BrainEvent } from '@/adapters/brain/types'
+import type { BrainEvent, BrainStatus } from '@/adapters/brain/types'
 import { useBrainStore } from '@/core/store/useBrainStore'
 import { useSpatialStore, activeModuleIndex } from '@/core/store/useSpatialStore'
 import { useSystemStore } from '@/core/store/useSystemStore'
@@ -21,7 +21,7 @@ import { executeTool } from './executeTool'
 
 export function useBrain() {
   const setPhase = useBrainStore((s) => s.setPhase)
-  const setConfigured = useBrainStore((s) => s.setConfigured)
+  const setBrainStatus = useBrainStore((s) => s.setBrainStatus)
   const setError = useBrainStore((s) => s.setError)
   const appendDelta = useBrainStore((s) => s.appendDelta)
   const commitResponse = useBrainStore((s) => s.commitResponse)
@@ -30,21 +30,23 @@ export function useBrain() {
 
   const inFlight = useRef<AbortController | null>(null)
 
-  // Probe once so the UI can say "no API key" before the user talks to a wall.
+  // Probe once so the UI can say what is wrong before the user talks to a wall.
   useEffect(() => {
     let cancelled = false
     fetch('/api/brain')
       .then((r) => r.json())
-      .then((data: { configured: boolean }) => {
-        if (!cancelled) setConfigured(Boolean(data.configured))
+      .then((status: BrainStatus) => {
+        if (!cancelled) setBrainStatus(status)
       })
-      .catch(() => {
-        if (!cancelled) setConfigured(false)
+      .catch((err: Error) => {
+        // The route itself is unreachable, which is a different thing from the
+        // provider being unreachable — but from here both mean "cannot verify".
+        if (!cancelled) setBrainStatus({ status: 'unreachable', detail: err.message })
       })
     return () => {
       cancelled = true
     }
-  }, [setConfigured])
+  }, [setBrainStatus])
 
   const cancel = useCallback(() => {
     inFlight.current?.abort()

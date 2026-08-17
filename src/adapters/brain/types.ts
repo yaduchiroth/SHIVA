@@ -61,6 +61,31 @@ export interface BrainRequest {
   signal?: AbortSignal
 }
 
+/**
+ * What a readiness probe is allowed to claim.
+ *
+ * A boolean was the bug. `configured` meant "a non-empty string exists in an
+ * environment variable" and was reported to the UI as readiness, so three
+ * unrelated failures — the env file never loading, a credential the provider
+ * rejects, and a model that no longer exists — all surfaced as the same
+ * sentence, and only one of them was even about a missing key.
+ *
+ * This is the same union `DataResult` already uses for panel data (see
+ * adapters/data/types.ts), applied to the one place it was skipped: a source is
+ * live, unconfigured, or failed, and the UI is forced to tell them apart.
+ */
+export type BrainStatus =
+  /** Ready. The credential works and the configured model exists. */
+  | { status: 'ready'; model: string }
+  /** No credential reached the server at all. */
+  | { status: 'no-key' }
+  /** The provider refused the credential. `detail` is the provider's own words. */
+  | { status: 'rejected'; detail: string }
+  /** The credential works, but the configured model is not available to it. */
+  | { status: 'model-missing'; model: string; available: string[] }
+  /** The provider could not be reached — network, proxy or timeout. */
+  | { status: 'unreachable'; detail: string }
+
 export interface Brain {
   readonly id: string
   readonly model: string
@@ -70,6 +95,14 @@ export interface Brain {
    * and the underlying request aborts.
    */
   stream(request: BrainRequest): AsyncIterable<BrainEvent>
+  /**
+   * Asks the provider whether this brain can actually run.
+   *
+   * Separate from `stream` because the UI needs to know BEFORE the user speaks,
+   * and separate from a plain boolean because "it can't" has several different
+   * answers with different fixes.
+   */
+  verify(): Promise<BrainStatus>
 }
 
 /**

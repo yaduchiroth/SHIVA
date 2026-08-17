@@ -1,6 +1,6 @@
 import { GeminiBrain } from '@/adapters/brain/gemini'
 import { TOOLS, buildSystemPrompt } from '@/adapters/brain/commands'
-import type { Message } from '@/adapters/brain/types'
+import type { BrainStatus, Message } from '@/adapters/brain/types'
 import type { ModuleId } from '@/core/types'
 
 /**
@@ -93,11 +93,38 @@ export async function POST(request: Request) {
   })
 }
 
-/** Capability probe, so the UI can say what's wrong before the user speaks. */
+/**
+ * How long a verified status is trusted, in ms.
+ *
+ * `verify()` costs a round trip to Google, and the console probes on every
+ * mount — including React StrictMode's double mount in development. A minute is
+ * long enough that navigating around never re-probes, and short enough that
+ * fixing `.env.local` and restarting shows up immediately (the restart clears
+ * this anyway, since it lives in module scope).
+ */
+const STATUS_TTL_MS = 60_000
+
+let cached: { at: number; status: BrainStatus } | null = null
+
+/**
+ * Capability probe, so the UI can say what's actually wrong before the user
+ * speaks.
+ *
+ * This used to return `{ configured: Boolean(process.env.GEMINI_API_KEY) }` —
+ * a claim about a string presented as a claim about the world. It reported
+ * "configured" for a key Google would refuse, and the user's only remaining
+ * clue arrived after they'd typed a message, as truncated JSON. Now it asks.
+ */
 export async function GET() {
-  const brain = new GeminiBrain()
-  return Response.json({
-    configured: brain.configured,
-    model: brain.configured ? brain.model : null,
-  })
+  const now = Date.now()
+  if (cached && now - cached.at < STATUS_TTL_MS) {
+    return Response.json(cached.status, { headers: { 'cache-control': 'no-store' } })
+  }
+
+  const status = await new GeminiBrain().verify()
+  // A transient network failure must not be remembered for a minute — the next
+  // probe should get a real answer rather than a stale excuse.
+  if (status.status !== 'unreachable') cached = { at: now, status }
+
+  return Response.json(status, { headers: { 'cache-control': 'no-store' } })
 }
