@@ -2,10 +2,11 @@
 
 A futuristic personal agentic AI — industrial spatial computing interface.
 
-> **Status: Phase 1 — Spatial OS Foundation.**
-> The 3D environment, gesture-controlled glass carousel, physics, MediaPipe hand
-> tracking, HUD and procedural audio. The AI brain lands in Phase 2; see
-> [`PHASE2.md`](./PHASE2.md) for the handoff.
+> **Status: Phase 2 — AI brain, voice, and command engine.**
+> The spatial shell from Phase 1, plus a Gemini brain that streams replies,
+> wake-word voice, a circle wake gesture, and tool-calling that drives the
+> interface. Live data sources for Schedule / Projects / Markets / Reach arrive
+> in Phase 3.
 
 ## Quick start
 
@@ -16,8 +17,16 @@ npm install        # also vendors the MediaPipe WASM + hand landmarker model
 npm run dev        # http://localhost:3000
 ```
 
-Requires Node 20.9+. No API keys are needed for Phase 1 — it runs with no
-`.env.local` at all. Copy `.env.example` when you start wiring Phase 2.
+Requires Node 20.9+. The spatial interface runs with no `.env.local` at all.
+To enable the brain, add one key:
+
+```bash
+cp .env.example .env.local
+# then set GEMINI_API_KEY — https://aistudio.google.com/apikey
+```
+
+Without it everything still runs; SHIVA simply reports that it has no key
+rather than pretending to think.
 
 Two things worth knowing on first run:
 
@@ -49,23 +58,53 @@ report the camera as unavailable.
 
 ### Controls
 
-|         | Hand      | Pointer              |
-| ------- | --------- | -------------------- |
-| Rotate  | Swipe     | Drag, scroll, or ← → |
-| Grab    | Pinch     | Press and hold       |
-| Expand  | Fist      | Click, Enter         |
-| Dismiss | Open palm | Escape               |
+|         | Hand                           | Pointer              |
+| ------- | ------------------------------ | -------------------- |
+| Rotate  | Swipe                          | Drag, scroll, or ← → |
+| Grab    | Pinch                          | Press and hold       |
+| Expand  | Fist                           | Click, Enter         |
+| Dismiss | Open palm                      | Escape               |
+| Wake    | Trace a circle with one finger | `/` to type          |
+
+### Talking to SHIVA
+
+Three ways in, all equal:
+
+- **Voice** — press **Voice**, then say "SHIVA, show me the markets". The wake
+  phrase is required so the microphone can stay on without every remark in the
+  room becoming a prompt. Chromium-based browsers only; Firefox has no
+  `SpeechRecognition`.
+- **Circle gesture** — point one finger and draw a circle in the air. Opens the
+  input without touching anything.
+- **Type** — press `/`.
+
+SHIVA can drive the interface, not just describe it: "open projects", "next
+panel", "close that", "drop the quality" all execute as tool calls. Commands go
+through the same event bus your gestures do, so voice and hands can't drift
+apart.
+
+It will not invent data. Modules whose sources land in Phase 3 are declared as
+unconnected in the system prompt, so asking about your portfolio gets "that
+source isn't connected yet" rather than a plausible fabricated number.
+
+### Verifying hand tracking
+
+Add `?debug=hands` to see the tracking inspector: the mirrored camera feed with
+the detected skeleton and the live pinch / grab / openness values. When a
+gesture doesn't fire, this distinguishes the four possible causes — no camera
+frames, no hand detected, wrong classification, or nothing listening — in about
+two seconds.
 
 ## Commands
 
-| Command             | Purpose                               |
-| ------------------- | ------------------------------------- |
-| `npm run dev`       | Development server                    |
-| `npm run build`     | Production build                      |
-| `npm run typecheck` | TypeScript, no emit                   |
-| `npm run lint`      | ESLint                                |
-| `npm test`          | Playwright render + performance suite |
-| `npm run assets`    | Re-fetch MediaPipe assets             |
+| Command             | Purpose                                     |
+| ------------------- | ------------------------------------------- |
+| `npm run dev`       | Development server                          |
+| `npm run build`     | Production build                            |
+| `npm run typecheck` | TypeScript, no emit                         |
+| `npm run lint`      | ESLint                                      |
+| `npm test`          | Playwright render, gesture and brain suites |
+| `npm run assets`    | Re-fetch MediaPipe assets                   |
 
 ### Quality override
 
@@ -81,9 +120,12 @@ app/                    routes, telemetry API, global design tokens
 src/core/               store, config, typed event bus, hand frame buffer
 src/spatial/            R3F stage, environment, carousel, physics, effects
 src/spatial/hands/      MediaPipe loop, gesture recognizer, cursors
-src/hud/                boot sequence and HUD clusters
+src/spatial/brain/      holographic particle text
+src/hud/                boot sequence, HUD clusters, brain console, tracking inspector
+src/brain/              brain client, speech recognition and synthesis
 src/audio/              procedural Web Audio engine
-src/adapters/           Phase 2/3 seams (Gemini, Calendar, Gmail, GitHub)
+src/adapters/brain/     Gemini client, tool definitions, system prompt
+src/adapters/data/      Phase 3 seams (Calendar, Gmail, GitHub)
 ```
 
 Three design decisions worth knowing before reading the code:
@@ -99,7 +141,13 @@ downstream behaviour instead of two code paths that drift apart.
 
 **Nothing fabricates data.** Readouts show real values or say plainly that they
 can't. Panels whose data source arrives in a later phase are labelled as such on
-their face rather than filled with plausible-looking placeholder numbers.
+their face, and the brain's system prompt names them as unconnected so the model
+declines rather than invents.
+
+**Gesture thresholds are measured, not guessed.** `tests/handPose.ts` generates
+anatomically proportioned landmarks and `calibrate.spec.ts` prints what the
+recognizer derives from each. Two gestures shipped broken in Phase 1 because the
+thresholds were estimates; they're now derived from those numbers and asserted.
 
 ## Testing
 
@@ -112,6 +160,11 @@ second on this scene. The suite distinguishes the two kinds of assertion:
 correctness properties that hold at any speed are always checked, while
 throughput assertions skip with a visible reason when there's no real GPU. See
 `tests/helpers.ts`.
+
+## Roadmap
+
+Phase 3 connects real data behind Schedule, Projects, Markets and Reach — see
+[`PHASE3.md`](./PHASE3.md).
 
 ## Deployment
 

@@ -115,6 +115,19 @@ export function useInteractionDriver() {
 }
 
 /**
+ * Whether an event originated in a text field.
+ *
+ * Global shortcuts and text entry share the keyboard, and the shortcuts here
+ * call `preventDefault`, so without this check they don't merely fire
+ * alongside typing — they actively break it.
+ */
+function isTextEntry(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
+}
+
+/**
  * Pointer and keyboard fallback.
  *
  * Not a lesser mode. Until the camera permission is granted — and on every
@@ -154,6 +167,8 @@ export function usePointerFallback(enabled: boolean) {
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      // A press on the HUD's own controls is not a press on the scene.
+      if (e.target instanceof HTMLElement && e.target.closest('button, input, form')) return
       const state = useSpatialStore.getState()
       drag.current = {
         x: e.clientX,
@@ -237,6 +252,12 @@ export function usePointerFallback(enabled: boolean) {
     }
 
     const onKey = (e: KeyboardEvent) => {
+      // Never steal keys from a text field. Without this, typing into the brain
+      // console rotates the carousel on every arrow key, toggles focus on
+      // Enter — so a message can never be sent — and swallows the space bar
+      // entirely, because these handlers call preventDefault.
+      if (isTextEntry(e.target)) return
+
       const state = useSpatialStore.getState()
       switch (e.key) {
         case 'ArrowLeft':

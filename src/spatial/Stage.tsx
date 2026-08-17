@@ -13,6 +13,7 @@ import { CameraRig } from './CameraRig'
 import { PerformanceGovernor } from './PerformanceGovernor'
 import { Carousel } from './carousel/Carousel'
 import { HandCursors } from './hands/HandCursors'
+import { HolographicText } from './brain/HolographicText'
 
 /**
  * The render surface.
@@ -75,6 +76,7 @@ export function Stage() {
         <Environment quality={quality} reducedMotion={reducedMotion} sunRef={setSun} />
         <Carousel quality={quality} reducedMotion={reducedMotion} />
         <HandCursors />
+        <HolographicText />
         <EffectStack quality={quality} sun={sun} />
         <Preload all />
       </Suspense>

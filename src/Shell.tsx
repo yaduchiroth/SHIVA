@@ -11,6 +11,7 @@ import { useAudioEngine } from '@/audio/useAudioEngine'
 import { useSystemStore } from '@/core/store/useSystemStore'
 import { getDeviceProfile, isHandDebugEnabled } from '@/lib/device'
 import { HandDebugOverlay } from '@/hud/HandDebugOverlay'
+import { BrainConsole } from '@/hud/BrainConsole'
 
 /**
  * Top-level composition.
@@ -60,6 +61,7 @@ export function Shell() {
       <Stage />
       <Hud onEnableTracking={startTracking} />
       {handDebug && <HandDebugOverlay />}
+      <BrainConsole />
       <BootSequence onComplete={handleBootComplete} />
       {/* Test anchor: marks the point at which the OS is interactive. */}
       {boot === 'ready' && <div data-testid="os-ready" hidden />}

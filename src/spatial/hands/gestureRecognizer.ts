@@ -39,6 +39,68 @@ export interface Landmark {
 const dist = (a: Landmark, b: Landmark): number =>
   Math.hypot(a.x - b.x, a.y - b.y, (a.z - b.z) * 0.5)
 
+/** How much fingertip history the circle detector considers, in seconds. */
+const CIRCLE_WINDOW_S = 1.6
+
+/**
+ * Detects a circle traced by the fingertip — SHIVA's gestural wake.
+ *
+ * Accumulates the *signed* angle swept around the path's centroid. Signed is
+ * the crucial part: a back-and-forth wave sweeps a large total angle but nets
+ * out near zero, whereas a real loop accumulates steadily in one direction.
+ * Summing absolute angles would fire on any vigorous hand movement.
+ *
+ * Two further requirements keep it honest — the path must be big enough to be
+ * deliberate, and roughly circular rather than a long thin scribble, which is
+ * what the radius-consistency check enforces.
+ */
+function detectCircle(trail: readonly { x: number; y: number; t: number }[]): boolean {
+  // Fewer than this and the path is too sparse to judge shape from.
+  if (trail.length < 12) return false
+
+  let cx = 0
+  let cy = 0
+  for (const p of trail) {
+    cx += p.x
+    cy += p.y
+  }
+  cx /= trail.length
+  cy /= trail.length
+
+  let radiusSum = 0
+  let radiusMin = Infinity
+  let radiusMax = 0
+  for (const p of trail) {
+    const r = Math.hypot(p.x - cx, p.y - cy)
+    radiusSum += r
+    radiusMin = Math.min(radiusMin, r)
+    radiusMax = Math.max(radiusMax, r)
+  }
+  const meanRadius = radiusSum / trail.length
+
+  // Normalised units: below this the "circle" is smaller than the jitter.
+  if (meanRadius < 0.045) return false
+  // A straight scribble has a near-zero minimum radius; a circle's radii cluster.
+  if (radiusMin < meanRadius * 0.35 || radiusMax > meanRadius * 2.2) return false
+
+  let swept = 0
+  for (let i = 1; i < trail.length; i++) {
+    const a = trail[i - 1]!
+    const b = trail[i]!
+    const angleA = Math.atan2(a.y - cy, a.x - cx)
+    const angleB = Math.atan2(b.y - cy, b.x - cx)
+    let delta = angleB - angleA
+    // Unwrap across the ±π seam, or every lap would cancel itself out.
+    if (delta > Math.PI) delta -= Math.PI * 2
+    if (delta < -Math.PI) delta += Math.PI * 2
+    swept += delta
+  }
+
+  // ~85% of a full turn, in either direction. Demanding a full 2π means a
+  // slightly open loop — which is what people actually draw — never registers.
+  return Math.abs(swept) > Math.PI * 1.7
+}
+
 /** Per-hand filter + gate state. Kept out of the store; see handFrame.ts. */
 export class HandRecognizer {
   private readonly palmFilter = new OneEuroVec3({ minCutoff: 1.0, beta: 0.02 })
@@ -74,6 +136,11 @@ export class HandRecognizer {
   private lastTimestamp = 0
   private swipeCooldown = 0
   private activeGesture: GestureName = 'idle'
+
+  // Circle detection: a rolling history of fingertip positions, and the total
+  // signed angle swept around their centroid. See `detectCircle`.
+  private readonly trail: { x: number; y: number; t: number }[] = []
+  private circleCooldown = 0
 
   constructor(private readonly handedness: Handedness) {}
 
@@ -255,6 +322,27 @@ export class HandRecognizer {
       target.x = source.x
       target.y = source.y
       target.z = source.z
+    }
+
+    // ── Circle (wake) ────────────────────────────────────────────────────────
+    // Only tracked while pointing: requiring a deliberate pose is what stops
+    // ordinary hand movement from accumulating into a false wake.
+    if (this.circleCooldown > 0) this.circleCooldown -= dt
+
+    if (pointing) {
+      this.trail.push({ x: out.tip.x, y: out.tip.y, t: timestamp })
+      // Bound by time, not sample count, so the window means the same thing at
+      // 20Hz on a weak machine as at 60Hz on a strong one.
+      while (this.trail.length > 0 && timestamp - this.trail[0]!.t > CIRCLE_WINDOW_S) {
+        this.trail.shift()
+      }
+      if (this.circleCooldown <= 0 && detectCircle(this.trail)) {
+        emit('brain:wake', { hand: this.handedness })
+        this.trail.length = 0
+        this.circleCooldown = 2
+      }
+    } else if (this.trail.length > 0) {
+      this.trail.length = 0
     }
 
     out.visible = true

@@ -37,6 +37,5 @@ function metrics(points: ReturnType<typeof handPose>) {
 
 test('calibration: pose metrics', () => {
   const rows = Object.entries(POSES).map(([name, build]) => ({ pose: name, ...metrics(build()) }))
-  // eslint-disable-next-line no-console
   console.log('\n' + JSON.stringify(rows, null, 2))
 })

@@ -29,6 +29,8 @@ export interface EventMap {
   'ui:confirm': { intensity: number }
   'tracking:acquired': { hands: number }
   'tracking:lost': Record<string, never>
+  /** A circle traced in the air — the gestural equivalent of the wake word. */
+  'brain:wake': { hand: Handedness }
 }
 
 type Handler<K extends keyof EventMap> = (payload: EventMap[K]) => void

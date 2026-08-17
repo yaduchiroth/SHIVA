@@ -17,6 +17,15 @@ export type InputMode = 'hand' | 'pointer'
 
 export type BootPhase = 'cold' | 'booting' | 'ready'
 
+/**
+ * Mirrors `QualityTier` from lib/device.
+ *
+ * Duplicated deliberately: this module is imported by server code (the brain
+ * route's command definitions), and lib/device touches `window` at module
+ * scope. Importing it there would drag DOM assumptions into an edge runtime.
+ */
+export type QualityTierName = 'low' | 'medium' | 'high'
+
 export type ModuleId = 'system' | 'weather' | 'calendar' | 'projects' | 'markets' | 'social'
 
 export interface ModuleDescriptor {
