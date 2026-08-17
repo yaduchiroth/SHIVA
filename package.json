@@ -9,7 +9,7 @@
     "build:standalone": "BUILD_STANDALONE=1 next build && node scripts/pack.mjs",
     "pack": "node scripts/pack.mjs",
     "bundle": "BUILD_STANDALONE=1 next build && node scripts/bundle.mjs",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "assets": "node scripts/fetch-assets.mjs",

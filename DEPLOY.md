@@ -1,15 +1,16 @@
 # Deploying SHIVA to Hostinger
 
-Written for the **hPanel Node.js application manager**. The VPS/SSH route is at
-the end.
+Two routes, both verified here. **Route A** is hPanel's automatic Node.js
+installer — pick the repo, it clones and installs. **Route B** uploads a
+pre-built bundle and is the fallback for when the build cannot run on the host.
 
-Everything up to §4 has been run end to end in a Linux container: the archive is
-built, extracted into a bare directory with nothing else in it, and started
-exactly the way hPanel starts it. It boots in 102 ms, serves the whole app with
-**zero failed requests**, the COOP/COEP headers survive, credentials load, and a
-headless browser paints the interface. What has **not** been exercised is
-Hostinger's own Passenger wrapper, SSL and reverse proxy — §5 is an ordered
-ladder so that whichever of those fails, one command tells you which.
+Route A was verified by cloning this repository fresh into an empty directory
+and doing exactly what the panel does: `npm install`, build, start `server.js`.
+It serves the whole app with **zero failed requests**, COOP/COEP survive, the
+7.8 MB landmarker downloads during install, and both credential routes work.
+What is **not** exercised is Hostinger's Passenger wrapper, its SSL, and whether
+its box has the memory — §5 is an ordered ladder so whichever fails, one command
+names it.
 
 ---
 
@@ -28,9 +29,100 @@ something quietly missing rather than an error you can chase.
    `Cross-Origin-Embedder-Policy: credentialless`, which let the vision WASM use
    threaded inference. A proxy that strips them costs roughly half the tracking
    throughput, with no error — just a worse number in the HUD.
-3. **Node 20.9 or newer.**
+3. **Node 20.9 or newer.** `.nvmrc` requests 22; panels read that far more often
+   than they read `engines`.
 
 ---
+
+# Route A — hPanel's automatic Node.js installer
+
+## A1. Point it at the repository
+
+hPanel → **Advanced → Node.js** (not the Git import screen, which offers a static
+deploy that would drop all four API routes). Select `yaduchiroth/SHIVA`, branch
+`main`.
+
+The panel clones and runs `npm install`. That triggers `postinstall`, which
+vendors the MediaPipe WASM and downloads the 7.8 MB hand-landmarker — verified
+on a clean clone. On this route the tracking assets arrive by themselves.
+
+## A2. Run the build — confirm this happened
+
+These panels reliably install; whether they also build varies. If the panel has
+a script runner, run `build`. Over SSH, `npm run build` in the application root.
+
+**You do not have to guess whether it ran.** Starting without a build refuses
+immediately and says so:
+
+```
+SHIVA cannot start: there is no production build in .next/
+
+The install step ran, but the build step did not. Run it:
+
+    npm run build
+```
+
+**If the build is killed instead**, you have hit the one real risk of this route:
+`next build` compiles three.js, React Three Fiber and a postprocessing chain, and
+on a memory-constrained plan the OOM killer takes it. It presents as a truncated
+log with no error naming the cause. That is what Route B exists for.
+
+## A3. Configure and start
+
+| Field            | Value       |
+| ---------------- | ----------- |
+| Application root | the clone   |
+| Startup file     | `server.js` |
+| Node version     | 22          |
+
+`server.js` at the repository root exists for this: the panel needs a real file
+to hand to Node, and `next start` is an npm script. It reads the `PORT` the panel
+assigns and binds `0.0.0.0` — leave the port alone. Bound to `localhost` the
+process is unreachable from the proxy and presents as a 502 with a completely
+healthy-looking log, which is an hour spent debugging the wrong layer.
+
+On boot it logs `SHIVA listening on http://0.0.0.0:<port>`, so the panel's log
+answers "what did it actually bind to" without guesswork.
+
+## A4. Credentials
+
+`.env.local` is gitignored, so the clone has none and the app will report
+`no-key` until you supply them. Both of these are verified working on this route:
+
+**Environment variables** — set them in the panel. Keeps secrets off disk.
+
+```
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-flash-latest
+DEEPGRAM_API_KEY=...          # optional — enables the Live voice button
+GITHUB_TOKEN=...              # optional — enables the Projects panel
+```
+
+**Or upload `.env.local`** into the application root via File Manager. On this
+route the process runs from the repository root, so it is read normally — none of
+the working-directory subtlety that applies to Route B.
+
+Either way, `npm run doctor` on the server parses what it finds and then asks
+Google whether the key actually works. It handles the environment-variable case
+without complaining about the absent file.
+
+Restart the app after any credential change — environment is read once at boot.
+
+**Never prefix any of these with `NEXT_PUBLIC_`** — that ships the value to every
+visitor's browser.
+
+## Updating
+
+Push to `main` and redeploy from the panel, then re-run the build. Or over SSH:
+`git pull && npm ci && npm run build`, then restart.
+
+---
+
+# Route B — upload a pre-built bundle
+
+Use this when the build cannot run on the host: it was OOM-killed, the panel
+never builds, or outbound access is blocked so `postinstall` cannot fetch the
+model. Nothing builds on Hostinger at all.
 
 ## Don't build on the server
 
@@ -49,7 +141,7 @@ Standalone output exists so none of that has to happen on the server.
 
 ---
 
-## 1. Build the bundle, on your Mac — verified
+## B1. Build the bundle, on your Mac — verified
 
 ```bash
 cd ~/SHIVA
@@ -110,7 +202,7 @@ rather set credentials in hPanel.
 
 ---
 
-## 2. Upload and extract — verified
+## B2. Upload and extract — verified
 
 hPanel → **File Manager**, or SFTP. Upload `shiva-deploy.tar.gz` and extract it
 into the directory you will use as the application root — say `~/shiva`.
@@ -140,7 +232,7 @@ If File Manager cannot extract `.tar.gz`, unpack it on your Mac
 
 ---
 
-## 3. Configure the Node app — verified locally
+## B3. Configure the Node app — verified locally
 
 hPanel → **Advanced → Node.js**:
 
@@ -163,7 +255,7 @@ Then **Restart** the application.
 
 ---
 
-## 4. Credentials
+## B4. Credentials
 
 Already handled — `npm run bundle` put `.env.local` in the archive, and §2 put it
 in the app root, which is where `server.js` reads it from. Verified: with the
@@ -178,7 +270,7 @@ visitor's browser.
 
 ---
 
-## 5. Verify, in this order
+# 5. Verify, in this order — both routes
 
 Each step isolates one layer, so a failure tells you _which_ layer.
 
@@ -198,7 +290,8 @@ curl -s https://your-domain/api/brain
 
 - **`{"status":"ready","model":"..."}`** — credentials arrived and Google accepts
   them.
-- **`{"status":"no-key"}`** — `.env.local` is not in the app root. See §2.
+- **`{"status":"no-key"}`** — no credentials reached the process. Route A: see
+  §A4. Route B: `.env.local` is not beside `server.js`, see §B2.
 - **`{"status":"rejected","detail":"..."}`** — the detail is Google's own words
   and names the fix.
 
@@ -207,8 +300,9 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}\n" \
   https://your-domain/models/hand_landmarker.task
 ```
 
-- **`200 7819105`** — static assets are being served. A 404 means the extraction
-  in §2 landed in a subdirectory.
+- **`200 7819105`** — static assets are being served. On Route A a 404 means
+  `postinstall` could not reach Google; run `npm run assets` on the server. On
+  Route B it means the extraction in §B2 landed in a subdirectory.
 
 Then open the site:
 
@@ -219,7 +313,7 @@ Then open the site:
 
 ---
 
-## Updating later
+## Updating later — Route B
 
 ```bash
 cd ~/SHIVA

@@ -18,6 +18,18 @@ const config = [
     ],
   },
   {
+    // The production startup file is CommonJS, alone in this project.
+    //
+    // Managed Node panels start an app by filename, and `package.json` has no
+    // `"type": "module"` — so an ESM server.js makes Node print a
+    // MODULE_TYPELESS_PACKAGE_JSON warning and reparse it, at the very top of
+    // the panel's log, which is often the only window into what the process
+    // did. Adding `"type": "module"` would silence it by reclassifying every
+    // `.js` file in the project, which is a lot of blast radius for a shim.
+    files: ['server.js'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',

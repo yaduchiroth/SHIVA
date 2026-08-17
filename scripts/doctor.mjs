@@ -87,8 +87,23 @@ for (const impostor of IMPOSTORS) {
 }
 
 const hasEnvLocal = entries.includes('.env.local')
-if (!hasEnvLocal && envFiles.length > 0) {
-  fail('No .env.local. Only .env.local is read for local secrets — copy .env.example to it.')
+
+// A missing .env.local is only a problem if nothing ELSE supplies the key.
+//
+// On a managed host the credentials normally come from the panel's environment
+// variables and there is no file at all — a completely correct setup. Reporting
+// that as a failure is the same mistake this tool exists to correct, one level
+// up: judging the configuration by where it was expected to come from rather
+// than by whether it is there.
+if (!hasEnvLocal) {
+  // Stated, not failed. Whether this matters depends on the environment, which
+  // is checked below — and one cause must not produce two failures, which is
+  // how a single missing key starts looking like a broken installation.
+  line(
+    process.env.GEMINI_API_KEY
+      ? '  No .env.local — reading credentials from the environment instead.'
+      : '  No .env.local.',
+  )
 }
 
 // ── 2. Is the file actually parseable, and is each key well formed? ──────────
