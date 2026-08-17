@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { QualitySettings } from '@/core/config/quality'
 import { InfiniteGrid } from './InfiniteGrid'
+import { LightSource } from './LightSource'
 import { Particulate } from './Particulate'
 import { VolumetricFog } from './VolumetricFog'
 
@@ -20,9 +21,11 @@ import { VolumetricFog } from './VolumetricFog'
 interface Props {
   quality: QualitySettings
   reducedMotion: boolean
+  /** Receives the god-ray light source so the effect stack can target it. */
+  sunRef: React.Ref<THREE.Mesh>
 }
 
-export function Environment({ quality, reducedMotion }: Props) {
+export function Environment({ quality, reducedMotion, sunRef }: Props) {
   const sweep = useRef<THREE.PointLight>(null)
 
   useFrame((state) => {
@@ -58,6 +61,8 @@ export function Environment({ quality, reducedMotion }: Props) {
       <pointLight position={[0, -4, 4]} intensity={12} distance={22} decay={2} color="#ffb27a" />
 
       <pointLight ref={sweep} intensity={26} distance={34} decay={2} color="#7c9cff" />
+
+      {quality.godRays && <LightSource ref={sunRef} />}
 
       <VolumetricFog density={quality.fogDensity} />
       <InfiniteGrid />

@@ -6,6 +6,7 @@ import {
   ChromaticAberration,
   DepthOfField,
   EffectComposer,
+  GodRays,
   Noise,
   Vignette,
 } from '@react-three/postprocessing'
@@ -27,9 +28,11 @@ import type { QualitySettings } from '@/core/config/quality'
 
 interface Props {
   quality: QualitySettings
+  /** The mesh god rays radiate from; null until the scene has mounted it. */
+  sun: THREE.Mesh | null
 }
 
-export function EffectStack({ quality }: Props) {
+export function EffectStack({ quality, sun }: Props) {
   // Effect constructors read these once, so a fresh Vector2 per render would
   // recreate the pass on every parent render.
   const aberrationOffset = useMemo(() => new THREE.Vector2(0.0004, 0.0006), [])
@@ -41,6 +44,28 @@ export function EffectStack({ quality }: Props) {
       multisampling={quality.shadows ? 4 : 0}
       enableNormalPass={false}
     >
+      {/* God rays first: they read the scene's occlusion, so they must run
+          before anything blurs or displaces what they're sampling. Mounted only
+          once the sun mesh exists — the effect constructs against it. */}
+      {quality.godRays && sun ? (
+        <GodRays
+          sun={sun}
+          samples={40}
+          density={0.94}
+          decay={0.92}
+          weight={0.32}
+          exposure={0.32}
+          clampMax={1}
+          // Half-res with a wide kernel: shafts are inherently soft, so paying
+          // for full resolution buys nothing visible.
+          resolutionScale={0.5}
+          kernelSize={KernelSize.MEDIUM}
+          blur
+        />
+      ) : (
+        <></>
+      )}
+
       {quality.depthOfField ? (
         <DepthOfField
           // Focus sits on the carousel ring, not the origin — the front panel is

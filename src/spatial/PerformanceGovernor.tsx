@@ -42,7 +42,6 @@ export function PerformanceGovernor() {
 
   const frames = useRef(0)
   const elapsed = useRef(0)
-  const worstMs = useRef(0)
   const lastChange = useRef(0)
   const lastReport = useRef(0)
 
@@ -60,7 +59,6 @@ export function PerformanceGovernor() {
     const dt = Math.min(delta, 0.5)
     frames.current += 1
     elapsed.current += dt
-    worstMs.current = Math.max(worstMs.current, dt * 1000)
 
     const windowClosed =
       frames.current >= SAMPLE_FRAMES ||
@@ -86,7 +84,6 @@ export function PerformanceGovernor() {
     if (pinned) {
       frames.current = 0
       elapsed.current = 0
-      worstMs.current = 0
       return
     }
 
@@ -104,7 +101,6 @@ export function PerformanceGovernor() {
 
     frames.current = 0
     elapsed.current = 0
-    worstMs.current = 0
   })
 
   return null

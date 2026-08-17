@@ -30,6 +30,11 @@ export function Stage() {
   // Read once at mount: changing it later would require recreating the context.
   const [capture] = useState(isCaptureEnabled)
 
+  // State rather than a ref: the effect stack has to re-render once the mesh
+  // exists, and a ref populating wouldn't tell it to. A callback ref gives us
+  // the mount notification a plain ref can't.
+  const [sun, setSun] = useState<THREE.Mesh | null>(null)
+
   useEffect(() => {
     const profile = getDeviceProfile()
     initDevice({
@@ -67,10 +72,10 @@ export function Stage() {
     >
       <Suspense fallback={null}>
         <CameraRig reducedMotion={reducedMotion} />
-        <Environment quality={quality} reducedMotion={reducedMotion} />
+        <Environment quality={quality} reducedMotion={reducedMotion} sunRef={setSun} />
         <Carousel quality={quality} reducedMotion={reducedMotion} />
         <HandCursors />
-        <EffectStack quality={quality} />
+        <EffectStack quality={quality} sun={sun} />
         <Preload all />
       </Suspense>
 
