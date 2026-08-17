@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { ModuleDescriptor } from '@/core/types'
 import { PALETTE, resolveColor } from '@/core/config/palette'
+import { readPanel } from './panelContent'
 
 /**
  * Panel faces, drawn with Canvas2D into a texture.
@@ -12,8 +13,9 @@ import { PALETTE, resolveColor } from '@/core/config/palette'
  * no network path, and gives precise control over the dense instrument-panel
  * layout the aesthetic calls for.
  *
- * Each texture is drawn once at construction. Live values are drawn into a
- * separate, much smaller readout texture that can be redrawn cheaply.
+ * Redrawn when the module's live data changes, not per frame. `drawPanel` is
+ * cheap by canvas standards but nowhere near frame-budget cheap, so the caller
+ * throttles it and skips redraws when the readout is unchanged.
  */
 
 const W = 1024
@@ -42,12 +44,16 @@ function roundRect(
   ctx.closePath()
 }
 
-export function createPanelTexture(module: ModuleDescriptor, index: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = W
-  canvas.height = H
-  const ctx = canvas.getContext('2d')!
+/**
+ * Draws a module's face into a 2D context.
+ *
+ * Split out from texture creation so the same routine can repaint an existing
+ * canvas when live data arrives — recreating the texture per update would
+ * reupload a megabyte to the GPU every few seconds.
+ */
+export function drawPanel(ctx: CanvasRenderingContext2D, module: ModuleDescriptor, index: number) {
   const accent = resolveColor(module.accent)
+  const readout = readPanel(module.id)
 
   ctx.clearRect(0, 0, W, H)
 
@@ -61,14 +67,12 @@ export function createPanelTexture(module: ModuleDescriptor, index: number): THR
   ctx.lineTo(W - PAD, 150)
   ctx.stroke()
 
-  // Module code, top-left — the FUI identifier.
   ctx.fillStyle = accent
   ctx.font = `500 30px ${MONO}`
   ctx.letterSpacing = '6px'
   ctx.textBaseline = 'alphabetic'
   ctx.fillText(module.code.toUpperCase(), PAD, 118)
 
-  // Slot index, top-right.
   ctx.fillStyle = INK.ash
   ctx.font = `400 26px ${MONO}`
   ctx.letterSpacing = '4px'
@@ -81,39 +85,42 @@ export function createPanelTexture(module: ModuleDescriptor, index: number): THR
   ctx.letterSpacing = '-2px'
   ctx.fillText(module.label.toUpperCase(), PAD, 300)
 
-  // ── Summary, wrapped ───────────────────────────────────────────────────────
-  ctx.fillStyle = INK.smoke
-  ctx.font = `400 30px ${MONO}`
-  ctx.letterSpacing = '1px'
-  wrapText(ctx, module.summary, PAD, 372, W - PAD * 2, 44)
-
-  // ── Instrument block ───────────────────────────────────────────────────────
-  // A bar field: pure ornament, but ornament with a consistent grammar reads as
-  // instrumentation rather than decoration.
-  const barTop = 540
-  const barH = 300
-  const bars = 26
-  const gap = 8
-  const barW = (W - PAD * 2 - gap * (bars - 1)) / bars
-
-  for (let i = 0; i < bars; i++) {
-    // Deterministic pseudo-random so a panel looks identical across reloads —
-    // a readout that reshuffles every mount reads as noise, not data.
-    const seed = Math.sin((index + 1) * 12.9898 + i * 78.233) * 43758.5453
-    const v = Math.abs(seed - Math.floor(seed))
-    const h = 30 + v * (barH - 30)
-    const x = PAD + i * (barW + gap)
-
-    ctx.fillStyle = INK.steel
-    roundRect(ctx, x, barTop, barW, barH, 3)
-    ctx.fill()
-
-    ctx.fillStyle = i > bars - 7 ? accent : INK.ash
-    roundRect(ctx, x, barTop + barH - h, barW, h, 3)
-    ctx.fill()
+  // ── Headline figure ────────────────────────────────────────────────────────
+  let y = 372
+  if (readout.headline) {
+    ctx.fillStyle = accent
+    ctx.font = `400 76px ${MONO}`
+    ctx.letterSpacing = '-1px'
+    ctx.fillText(readout.headline, PAD, y + 56)
+    y += 100
   }
 
-  // ── Footer: status line ────────────────────────────────────────────────────
+  if (readout.caption) {
+    ctx.fillStyle = INK.smoke
+    ctx.font = `400 28px ${MONO}`
+    ctx.letterSpacing = '1px'
+    y = wrapText(ctx, readout.caption, PAD, y + 16, W - PAD * 2, 40) + 30
+  }
+
+  // ── Chart ──────────────────────────────────────────────────────────────────
+  const barTop = Math.max(y, 560)
+  const barH = 260
+  drawSeries(ctx, readout.series, PAD, barTop, W - PAD * 2, barH, accent, index)
+
+  // ── Rows ───────────────────────────────────────────────────────────────────
+  ctx.font = `400 26px ${MONO}`
+  ctx.letterSpacing = '2px'
+  let rowY = barTop + barH + 58
+  for (const row of readout.rows.slice(0, 4)) {
+    ctx.fillStyle = INK.ash
+    ctx.fillText(row.label.toUpperCase(), PAD, rowY)
+    ctx.fillStyle = INK.mist
+    const width = ctx.measureText(row.value).width
+    ctx.fillText(row.value, W - PAD - width, rowY)
+    rowY += 42
+  }
+
+  // ── Footer status ──────────────────────────────────────────────────────────
   ctx.strokeStyle = INK.steel
   ctx.lineWidth = 2
   ctx.beginPath()
@@ -121,18 +128,86 @@ export function createPanelTexture(module: ModuleDescriptor, index: number): THR
   ctx.lineTo(W - PAD, H - 190)
   ctx.stroke()
 
-  // Honest labelling: panels whose data source lands in a later phase say so,
-  // rather than showing invented numbers that look live.
-  const live = module.liveIn === 1
-  ctx.fillStyle = live ? PALETTE.nominal : INK.ash
+  // The status dot never lies about provenance: green only for genuinely live
+  // data, amber for a real failure, grey for a source that doesn't exist yet.
+  const dot =
+    readout.status === 'live'
+      ? PALETTE.nominal
+      : readout.status === 'error'
+        ? PALETTE.caution
+        : INK.ash
+  ctx.fillStyle = dot
   ctx.beginPath()
   ctx.arc(PAD + 9, H - 128, 9, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.fillStyle = live ? INK.mist : INK.ash
+  ctx.fillStyle = readout.status === 'live' ? INK.mist : INK.ash
   ctx.font = `400 26px ${MONO}`
   ctx.letterSpacing = '5px'
-  ctx.fillText(live ? 'LIVE' : `AWAITING PHASE ${module.liveIn}`, PAD + 34, H - 118)
+  ctx.fillText(readout.note, PAD + 34, H - 118)
+}
+
+/**
+ * Bar chart, or a placeholder lattice when there is no data.
+ *
+ * The placeholder is deliberately flat and grey — it must not be mistakable for
+ * a reading. Earlier this drew pseudo-random bars, which looked like data and
+ * was exactly the kind of thing that makes a dashboard untrustworthy.
+ */
+function drawSeries(
+  ctx: CanvasRenderingContext2D,
+  series: { label: string; value: number }[],
+  x: number,
+  top: number,
+  width: number,
+  height: number,
+  accent: string,
+  seed: number,
+) {
+  const gap = 8
+
+  if (series.length === 0) {
+    const bars = 26
+    const barW = (width - gap * (bars - 1)) / bars
+    ctx.fillStyle = INK.graphite
+    for (let i = 0; i < bars; i++) {
+      roundRect(ctx, x + i * (barW + gap), top + height - 24, barW, 24, 3)
+      ctx.fill()
+    }
+    void seed
+    return
+  }
+
+  const bars = Math.min(series.length, 26)
+  const barW = (width - gap * (bars - 1)) / bars
+  const values = series.slice(-bars).map((p) => p.value)
+  const max = Math.max(...values, 0.0001)
+  // Include zero for counts, but not for temperature — a 19-to-23°C range
+  // plotted from zero is a flat line that tells you nothing.
+  const min = Math.min(...values)
+  const floor = min >= 0 && max - min > max * 0.5 ? 0 : min - (max - min) * 0.25
+  const span = Math.max(max - floor, 0.0001)
+
+  values.forEach((value, i) => {
+    const bx = x + i * (barW + gap)
+    ctx.fillStyle = INK.steel
+    roundRect(ctx, bx, top, barW, height, 3)
+    ctx.fill()
+
+    const h = Math.max(6, ((value - floor) / span) * height)
+    // The most recent readings carry the accent; older ones recede.
+    ctx.fillStyle = i >= values.length - 6 ? accent : INK.ash
+    roundRect(ctx, bx, top + height - h, barW, h, 3)
+    ctx.fill()
+  })
+}
+
+export function createPanelTexture(module: ModuleDescriptor, index: number): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')!
+  drawPanel(ctx, module, index)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -148,7 +223,7 @@ function wrapText(
   y: number,
   maxWidth: number,
   lineHeight: number,
-): void {
+): number {
   let line = ''
   let cursorY = y
   for (const word of text.split(' ')) {
@@ -162,4 +237,6 @@ function wrapText(
     }
   }
   if (line) ctx.fillText(line, x, cursorY)
+  // Returned so callers can flow content beneath a variable-height block.
+  return cursorY
 }

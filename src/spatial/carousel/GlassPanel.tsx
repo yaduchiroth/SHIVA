@@ -10,7 +10,8 @@ import type { QualitySettings } from '@/core/config/quality'
 import { damp } from '@/lib/math'
 import { emit } from '@/core/events/bus'
 import { resolveColor } from '@/core/config/palette'
-import { createPanelTexture } from './panelTexture'
+import { createPanelTexture, drawPanel } from './panelTexture'
+import { readPanel } from './panelContent'
 
 /**
  * A single glass panel.
@@ -129,6 +130,32 @@ export function GlassPanel({
   // Neither the geometry nor the canvas texture is created by R3F's reconciler,
   // so neither is disposed automatically.
   useEffect(() => () => void (geometry.dispose(), texture.dispose()), [geometry, texture])
+
+  // Repaint the face when its live readout changes.
+  //
+  // Keyed on a signature of the readout rather than on a timer: the system
+  // panel's numbers move every second, but Markets has no source and would
+  // otherwise be re-rasterising an identical megabyte forever. Comparing the
+  // rendered content is what makes "redraw on change" actually mean it.
+  const signature = useRef('')
+  const repaintClock = useRef(0)
+  useFrame((state) => {
+    // A quarter-second ceiling: faster than this is imperceptible on a panel
+    // and each repaint is a full canvas rasterise plus a GPU upload.
+    if (state.clock.elapsedTime - repaintClock.current < 0.25) return
+    repaintClock.current = state.clock.elapsedTime
+
+    const readout = readPanel(module.id)
+    const next = `${readout.status}|${readout.headline}|${readout.caption}|${readout.note}|${readout.series.map((p) => p.value).join(',')}|${readout.rows.map((r) => r.value).join('|')}`
+    if (next === signature.current) return
+    signature.current = next
+
+    const canvas = texture.image as HTMLCanvasElement
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    drawPanel(ctx, module, index)
+    texture.needsUpdate = true
+  })
 
   const tmp = useMemo(() => new THREE.Vector3(), [])
   const tmpQuat = useMemo(() => new THREE.Quaternion(), [])

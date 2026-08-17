@@ -32,6 +32,8 @@ interface BrainState {
   /** Commits the streamed response into history and clears the buffer. */
   commitResponse: () => void
   pushUser: (content: string) => void
+  /** Records a tool result so the next turn can answer from it. */
+  pushToolResult: (toolName: string, content: string, thoughtSignature?: string) => void
   setError: (error: string | null) => void
   reset: () => void
 }
@@ -74,6 +76,14 @@ export const useBrainStore = create<BrainState>((set) => ({
         -MAX_HISTORY,
       ),
       transcript: '',
+    })),
+
+  pushToolResult: (toolName, content, thoughtSignature) =>
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        { role: 'tool' as const, content, at: Date.now(), toolName, thoughtSignature },
+      ].slice(-MAX_HISTORY),
     })),
 
   setError: (error) => set({ error, phase: error ? 'error' : 'idle' }),

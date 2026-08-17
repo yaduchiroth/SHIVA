@@ -2,11 +2,12 @@
 
 A futuristic personal agentic AI — industrial spatial computing interface.
 
-> **Status: Phase 2 — AI brain, voice, and command engine.**
-> The spatial shell from Phase 1, plus a Gemini brain that streams replies,
-> wake-word voice, a circle wake gesture, and tool-calling that drives the
-> interface. Live data sources for Schedule / Projects / Markets / Reach arrive
-> in Phase 3.
+> **Status: Phase 3 — live data.**
+> The spatial shell, the Gemini brain, and real data behind the panels. System
+> diagnostics and local weather are live with no credentials; weather drives the
+> 3D environment's rain, fog and light. Projects reads GitHub with a token.
+> Schedule, Markets and Reach declare themselves unconnected rather than
+> inventing figures.
 
 ## Quick start
 
@@ -83,9 +84,33 @@ panel", "close that", "drop the quality" all execute as tool calls. Commands go
 through the same event bus your gestures do, so voice and hands can't drift
 apart.
 
-It will not invent data. Modules whose sources land in Phase 3 are declared as
-unconnected in the system prompt, so asking about your portfolio gets "that
-source isn't connected yet" rather than a plausible fabricated number.
+It also reads live data before answering: "how's my frame rate", "what's the
+weather", "how many PRs are open" all call `read_module` and answer from the
+same numbers the panel is showing, rather than from memory.
+
+It will not invent data. Unconnected sources are declared as such in the system
+prompt. Asked "what is my stock portfolio worth today?" it answers _"the markets
+module is not connected yet, so I cannot retrieve your portfolio value"_ — that
+is a real response from the live model, not an aspiration.
+
+## Live data
+
+| Module         | Source                                                              | Needs             |
+| -------------- | ------------------------------------------------------------------- | ----------------- |
+| System         | Measured in-browser: fps, frame time, renderer, heap, tracking rate | nothing           |
+| Environment    | Open-Meteo, and it drives the 3D weather                            | nothing           |
+| Projects       | GitHub GraphQL — open PRs, review requests, CI status               | `GITHUB_TOKEN`    |
+| Schedule       | Google Calendar + Gmail                                             | not yet connected |
+| Markets, Reach | —                                                                   | not yet connected |
+
+**Weather changes the room.** Rain and snow fall as GPU particles, fog thickens
+when it's foggy, the key light drops at night, and thunderstorms flash. It's the
+actual weather where you are, not a theme picker.
+
+Every panel shows one of four states and never blurs them: live data, a named
+missing variable, the reason a fetch failed, or "not connected". An empty chart
+would read as _zero_, which is the difference between an instrument and a
+decoration.
 
 ### Verifying hand tracking
 

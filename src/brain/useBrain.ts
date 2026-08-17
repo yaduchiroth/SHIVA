@@ -7,6 +7,8 @@ import { useSpatialStore, activeModuleIndex } from '@/core/store/useSpatialStore
 import { useSystemStore } from '@/core/store/useSystemStore'
 import { MODULES, getModule } from '@/core/config/modules'
 import { emit } from '@/core/events/bus'
+import { SseFramer, sseData } from '@/lib/sse'
+import { readPanel } from '@/spatial/carousel/panelContent'
 import type { ModuleId, QualityTierName } from '@/core/types'
 
 /**
@@ -54,6 +56,17 @@ function executeTool(name: string, args: Record<string, unknown>): string {
       return 'dismissed'
     }
 
+    case 'read_module': {
+      // Returns the same readout the panel renders, so what SHIVA says and what
+      // you can see on the panel are the same numbers by construction.
+      const readout = readPanel(args.module as ModuleId)
+      if (readout.status !== 'live') {
+        return `${args.module}: no live data (${readout.note})`
+      }
+      const rows = readout.rows.map((r) => `${r.label}: ${r.value}`).join('; ')
+      return `${args.module}: ${readout.headline} — ${readout.caption}. ${rows}`
+    }
+
     case 'set_quality': {
       const tier = args.tier as QualityTierName
       if (tier !== 'low' && tier !== 'medium' && tier !== 'high') return `unknown tier: ${tier}`
@@ -73,6 +86,7 @@ export function useBrain() {
   const appendDelta = useBrainStore((s) => s.appendDelta)
   const commitResponse = useBrainStore((s) => s.commitResponse)
   const pushUser = useBrainStore((s) => s.pushUser)
+  const pushToolResult = useBrainStore((s) => s.pushToolResult)
 
   const inFlight = useRef<AbortController | null>(null)
 
@@ -97,19 +111,16 @@ export function useBrain() {
     inFlight.current = null
   }, [])
 
-  const ask = useCallback(
-    async (prompt: string) => {
-      const text = prompt.trim()
-      if (!text) return
-
-      // A new question supersedes whatever is still streaming.
-      cancel()
-      const controller = new AbortController()
-      inFlight.current = controller
-
-      pushUser(text)
-      setError(null)
-      setPhase('thinking')
+  /**
+   * Runs one request/response turn.
+   *
+   * @returns tool results worth feeding back, if any.
+   */
+  const runTurn = useCallback(
+    async (
+      controller: AbortController,
+    ): Promise<{ name: string; result: string; signature?: string }[]> => {
+      const pending: { name: string; result: string; signature?: string }[] = []
 
       const spatial = useSpatialStore.getState()
       const telemetry = useSystemStore.getState().telemetry
@@ -131,38 +142,34 @@ export function useBrain() {
           }),
         })
       } catch (err) {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted) return pending
         setError(`Could not reach SHIVA's brain: ${(err as Error).message}`)
-        return
+        return pending
       }
 
       if (!response.ok || !response.body) {
         setError(`Brain returned ${response.status}.`)
-        return
+        return pending
       }
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let buffer = ''
+      const framer = new SseFramer()
       let sawAnything = false
 
       try {
         while (true) {
           const { done, value } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true })
-
-          // Frames end on a blank line; the tail is a partial frame and must
-          // stay buffered or its JSON gets cut mid-object.
-          const frames = buffer.split('\n\n')
-          buffer = frames.pop() ?? ''
+          const frames = done
+            ? framer.flush()
+            : framer.push(decoder.decode(value, { stream: true }))
 
           for (const frame of frames) {
-            const line = frame.split('\n').find((l) => l.startsWith('data:'))
-            if (!line) continue
+            const payload = sseData(frame)
+            if (!payload) continue
             let event: BrainEvent
             try {
-              event = JSON.parse(line.slice(5).trim()) as BrainEvent
+              event = JSON.parse(payload) as BrainEvent
             } catch {
               continue
             }
@@ -179,38 +186,84 @@ export function useBrain() {
               case 'tool-call': {
                 const result = executeTool(event.name, event.args)
                 emit('ui:confirm', { intensity: 0.5 })
-                // Kept out of the transcript deliberately: the user sees the
-                // interface move, which is better feedback than a line of text
-                // describing that it moved.
-                if (process.env.NODE_ENV === 'development') {
-                  console.info(`[brain] ${event.name} → ${result}`)
+
+                // Only reads need feeding back. An action like focus_module is
+                // its own feedback — the interface moved — and replaying it to
+                // the model just spends a round trip to be told "done".
+                if (event.name === 'read_module') {
+                  pending.push({
+                    name: event.name,
+                    result,
+                    signature: event.thoughtSignature,
+                  })
                 }
                 break
               }
 
               case 'error':
                 setError(event.message)
-                return
+                return pending
 
               case 'done':
                 break
             }
           }
+
+          if (done) break
         }
       } catch (err) {
         if (!controller.signal.aborted) {
           setError(`Stream interrupted: ${(err as Error).message}`)
         }
-        return
+        return pending
       } finally {
         reader.releaseLock()
+      }
+
+      return pending
+    },
+    [appendDelta, setError, setPhase],
+  )
+
+  const ask = useCallback(
+    async (prompt: string) => {
+      const text = prompt.trim()
+      if (!text) return
+
+      // A new question supersedes whatever is still streaming.
+      cancel()
+      const controller = new AbortController()
+      inFlight.current = controller
+
+      pushUser(text)
+      setError(null)
+      setPhase('thinking')
+
+      try {
+        // At most one follow-up. A read tool answers in a single extra turn,
+        // and an unbounded loop is how a tool-calling agent quietly spends a
+        // rate limit arguing with itself.
+        for (let round = 0; round < 2; round++) {
+          const pending = await runTurn(controller)
+          if (controller.signal.aborted) return
+          if (pending.length === 0) break
+
+          // Commit any text from this round before the follow-up overwrites the
+          // streaming buffer.
+          commitResponse()
+          for (const call of pending) {
+            pushToolResult(call.name, call.result, call.signature)
+          }
+          setPhase('thinking')
+        }
+      } finally {
         inFlight.current = null
       }
 
       commitResponse()
-      setPhase('idle')
+      if (useBrainStore.getState().phase !== 'error') setPhase('idle')
     },
-    [appendDelta, cancel, commitResponse, pushUser, setError, setPhase],
+    [cancel, commitResponse, pushToolResult, pushUser, runTurn, setError, setPhase],
   )
 
   useEffect(() => cancel, [cancel])

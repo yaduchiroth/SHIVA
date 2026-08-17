@@ -59,6 +59,22 @@ export const TOOLS: ToolDefinition[] = [
     parameters: { type: 'object', properties: {} },
   },
   {
+    name: 'read_module',
+    description:
+      "Read the current live data for a module. Call this before answering any question about the user's system performance, local weather, or repositories — never answer from memory or assumption.",
+    parameters: {
+      type: 'object',
+      properties: {
+        module: {
+          type: 'string',
+          enum: ['system', 'weather', 'projects'],
+          description: 'Which module to read. Only these have live sources.',
+        },
+      },
+      required: ['module'],
+    },
+  },
+  {
     name: 'set_quality',
     description:
       'Change the render quality tier. Use when the user says the interface is slow or asks for higher fidelity.',

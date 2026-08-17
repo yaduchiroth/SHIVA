@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Stage } from '@/spatial/Stage'
 import { Hud } from '@/hud/Hud'
 import { BootSequence } from '@/hud/BootSequence'
-import { useTelemetry } from '@/hud/useTelemetry'
+import { useLiveData } from '@/data/useLiveData'
 import { useHandTracking } from '@/spatial/hands/useHandTracking'
 import { useInteractionDriver, usePointerFallback } from '@/spatial/hands/useInteractionDriver'
 import { useAudioEngine } from '@/audio/useAudioEngine'
@@ -28,7 +28,8 @@ export function Shell() {
 
   const { start: startTracking } = useHandTracking()
 
-  useTelemetry()
+  // Drives every live source: fetched (weather, projects) and measured (system).
+  useLiveData()
   useInteractionDriver()
   // Pointer control stays live until hand tracking takes over; the hook itself
   // stands down when input mode flips.

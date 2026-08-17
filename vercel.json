@@ -5,7 +5,7 @@
   "installCommand": "npm install",
   "regions": ["bom1"],
   "functions": {
-    "app/api/telemetry/route.ts": {
+    "app/api/data/weather/route.ts": {
       "maxDuration": 15
     }
   }

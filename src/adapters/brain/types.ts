@@ -14,19 +14,34 @@
  * reach the browser — hence `app/api/brain/`, not a client-side SDK call.
  */
 
-export type Role = 'user' | 'assistant' | 'system'
+export type Role = 'user' | 'assistant' | 'system' | 'tool'
 
 export interface Message {
   role: Role
   content: string
   /** Wall-clock ms. */
   at: number
+  /**
+   * Set on `tool` messages: which function produced this result, and — for
+   * models that emit one — the opaque reasoning token that must be echoed back
+   * with the call. Gemini 3 rejects a function-response turn that drops it.
+   */
+  toolName?: string
+  toolCallId?: string
+  thoughtSignature?: string
 }
 
 /** Streaming chunks. The UI assembles holographic text from these. */
 export type BrainEvent =
   | { type: 'text'; delta: string }
-  | { type: 'tool-call'; id: string; name: string; args: Record<string, unknown> }
+  | {
+      type: 'tool-call'
+      id: string
+      name: string
+      args: Record<string, unknown>
+      /** Opaque reasoning token; must be returned with the result if present. */
+      thoughtSignature?: string
+    }
   | { type: 'tool-result'; id: string; result: unknown }
   | { type: 'done'; reason: 'stop' | 'length' | 'tool' }
   | { type: 'error'; message: string }

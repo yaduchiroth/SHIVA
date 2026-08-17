@@ -1,8 +1,8 @@
-# Phase 3 handoff — real data behind the panels
+# Phase 4 handoff — the remaining data sources
 
-Phase 2 built the brain, voice and command engine. Phase 3 connects the four
-modules that currently declare themselves unconnected: Schedule, Projects,
-Markets, Reach.
+Phase 3 connected System (measured), Environment (Open-Meteo, driving the 3D
+weather) and Projects (GitHub GraphQL). Three modules remain unconnected and say
+so: Schedule, Markets, Reach.
 
 ## The constraint that shapes everything here
 
@@ -31,40 +31,35 @@ access to the contents of every email you have ever received.
 Needs a token store. Refresh tokens outlive the process, so this is the first
 piece of state SHIVA cannot keep in memory.
 
-### 2. GitHub
-
-A fine-grained PAT with read-only `contents`, `pull_requests` and `checks`.
-Prefer the GraphQL API: the `RepoSummary` shape needs PRs, review requests and CI
-status, which is three REST round-trips per repo and one GraphQL query.
-
-### 3. Markets and Reach
+### 2. Markets and Reach
 
 Markets needs a quote source; most free tiers are heavily rate-limited, so cache
 server-side and treat a rate-limit response as `error`, not as stale-but-fine.
 Instagram requires a Meta app with `instagram_graph_user_profile` — the heaviest
 setup of anything here, and worth doing last.
 
-### 4. Panel visualisation
+### 3. Adding a source
 
-Panel faces are Canvas2D textures (`src/spatial/carousel/panelTexture.ts`). The
-instrument bar field there is currently ornament drawn from a deterministic
-hash; Phase 3 replaces its input with real series data. Keep it deterministic
-per-value — a readout that reshuffles on every re-render reads as noise.
+The plumbing is done; a new source is now four edits:
 
-For the 3D charts the design doc calls for, follow the pattern in
-`src/spatial/environment/Particulate.tsx` and
-`src/spatial/brain/HolographicText.tsx`: geometry authored once, motion as a
-closed-form function of time in the vertex shader, never per-frame buffer
+1. A route under `app/api/data/`, returning the `{status, data|missing|reason}`
+   envelope every other source returns.
+2. A snapshot type and slot in `src/core/store/useDataStore.ts`.
+3. A case in `readPanel` (`src/spatial/carousel/panelContent.ts`) mapping it to
+   a headline, series and rows. Panels repaint automatically when the readout
+   changes.
+4. Flip the module's `liveIn` to 1 in `src/core/config/modules.ts`. The system
+   prompt derives its live/unconnected lists from that field, so the brain stops
+   declining to discuss it with no prompt edit.
+
+`read_module` already exposes any live source to the brain — extend its enum.
+
+### 4. 3D charts
+
+The design doc calls for charts as geometry rather than texture. Follow
+`src/spatial/environment/Precipitation.tsx`: attributes authored once, motion as
+a closed-form function of time in the vertex shader, never per-frame buffer
 writes from JS.
-
-### 5. New tools
-
-Each data source should get a brain tool alongside its panel, so "what's on my
-calendar tomorrow" answers rather than merely navigating. Add them to `TOOLS`
-in `commands.ts` and to the dispatcher in `src/brain/useBrain.ts`. Tools that
-read data will need to return results into the conversation — the
-`tool-result` event already exists in `BrainEvent` for this, and is currently
-unused.
 
 ## Constraints worth keeping
 
