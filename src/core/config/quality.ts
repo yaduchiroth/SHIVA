@@ -27,8 +27,10 @@ export interface QualitySettings {
 export const QUALITY: Record<QualityTier, QualitySettings> = {
   low: {
     dpr: [0.6, 1],
-    bloom: true, // The last effect to cut — without it nothing glows and the
-    godRays: false, // whole aesthetic collapses.
+    // Bloom survives even here: it's the last effect worth cutting, because
+    // without it nothing glows and the whole aesthetic collapses.
+    bloom: true,
+    godRays: false,
     depthOfField: false,
     chromaticAberration: false,
     transmissionSamples: 2,
