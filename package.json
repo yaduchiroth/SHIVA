@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:standalone": "BUILD_STANDALONE=1 next build && node scripts/pack.mjs",
+    "pack": "node scripts/pack.mjs",
+    "bundle": "BUILD_STANDALONE=1 next build && node scripts/bundle.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

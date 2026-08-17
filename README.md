@@ -223,14 +223,16 @@ be said about either.
 
 ## Commands
 
-| Command             | Purpose                                     |
-| ------------------- | ------------------------------------------- |
-| `npm run dev`       | Development server                          |
-| `npm run build`     | Production build                            |
-| `npm run typecheck` | TypeScript, no emit                         |
-| `npm run lint`      | ESLint                                      |
-| `npm test`          | Playwright render, gesture and brain suites |
-| `npm run assets`    | Re-fetch MediaPipe assets                   |
+| Command                    | Purpose                                     |
+| -------------------------- | ------------------------------------------- |
+| `npm run dev`              | Development server                          |
+| `npm run build`            | Production build                            |
+| `npm run typecheck`        | TypeScript, no emit                         |
+| `npm run lint`             | ESLint                                      |
+| `npm test`                 | Playwright render, gesture and brain suites |
+| `npm run assets`           | Re-fetch MediaPipe assets                   |
+| `npm run doctor`           | Diagnose credentials and `.env` problems    |
+| `npm run build:standalone` | Self-hosted bundle — see `DEPLOY.md`        |
 
 ### Quality override
 

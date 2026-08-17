@@ -24,3 +24,6 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Deploy archive — contains .env.local when built with credentials.
+shiva-deploy.tar.gz
