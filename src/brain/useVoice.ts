@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBrainStore } from '@/core/store/useBrainStore'
 import { emit } from '@/core/events/bus'
 import {
@@ -30,6 +30,24 @@ const RESTART_DELAY_MS = 400
 const MAX_CONSECUTIVE_FAILURES = 5
 
 export function useVoice(onCommand: (text: string) => void) {
+  /**
+   * Whether this browser has speech recognition — resolved after mount, not
+   * during render.
+   *
+   * Calling `isRecognitionSupported()` in the render body reads `window`, which
+   * does not exist on the server, so it returned false during SSR and true on
+   * the client. React reports that as a hydration mismatch and — in its own
+   * words — "won't be patched up": the button keeps the server's `disabled`
+   * attribute, so on a hard load the control for the feature is dead precisely
+   * on the browsers that support it.
+   *
+   * Starting false and correcting in an effect makes both renders agree. The
+   * button is briefly disabled, which is honest: nothing is known about the
+   * browser yet.
+   */
+  const [supported, setSupported] = useState(false)
+  useEffect(() => setSupported(isRecognitionSupported()), [])
+
   const setWakeArmed = useBrainStore((s) => s.setWakeArmed)
   const setTranscript = useBrainStore((s) => s.setTranscript)
   const setPhase = useBrainStore((s) => s.setPhase)
@@ -165,5 +183,5 @@ export function useVoice(onCommand: (text: string) => void) {
 
   useEffect(() => stop, [stop])
 
-  return { start, stop, toggle, speak, supported: isRecognitionSupported() }
+  return { start, stop, toggle, speak, supported }
 }
