@@ -31,9 +31,24 @@ const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
  * fault that retrying only delays.
  */
 const RETRYABLE = new Set([429, 503, 500, 502, 504])
-const MAX_ATTEMPTS = 3
+const MAX_ATTEMPTS = 2
 /** Base for exponential backoff, in ms. */
-const BACKOFF_MS = 700
+const BACKOFF_MS = 600
+
+/**
+ * Models to fall through to when the preferred one is unavailable.
+ *
+ * This is not redundancy for its own sake. On a free-tier key the flagship
+ * flash models are routinely rate-limited (429) or saturated (503) while the
+ * lite models answer immediately — verified, both statuses observed minutes
+ * apart on the same key. Retrying one model harder does not help; it is out of
+ * quota, not momentarily busy.
+ *
+ * Falling through keeps the assistant answering with a slightly smaller model
+ * instead of failing outright, which is the difference between "occasionally
+ * less sharp" and "randomly broken".
+ */
+const FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3-flash-preview']
 
 interface GeminiPart {
   text?: string
@@ -202,7 +217,6 @@ export class GeminiBrain implements Brain {
       return
     }
 
-    const url = `${ENDPOINT}/${this.model}:streamGenerateContent?alt=sse`
     const body = JSON.stringify({
       contents: toContents(request.messages),
       ...(request.system ? { systemInstruction: { parts: [{ text: request.system }] } } : {}),
@@ -217,38 +231,53 @@ export class GeminiBrain implements Brain {
     let lastStatus = 0
     let lastDetail = ''
 
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      if (request.signal?.aborted) return
+    // Deduped so an explicit GEMINI_MODEL matching a fallback isn't tried twice.
+    const candidates = [this.model, ...FALLBACK_MODELS].filter((m, i, all) => all.indexOf(m) === i)
 
-      try {
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-goog-api-key': this.apiKey,
-          },
-          signal: request.signal,
-          body,
-        })
-      } catch (err) {
-        // An aborted request is the user interrupting, not a failure worth
-        // reporting as one.
+    outer: for (const candidate of candidates) {
+      const url = `${ENDPOINT}/${candidate}:streamGenerateContent?alt=sse`
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         if (request.signal?.aborted) return
-        yield { type: 'error', message: `Network error: ${(err as Error).message}` }
-        return
+
+        try {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-goog-api-key': this.apiKey,
+            },
+            signal: request.signal,
+            body,
+          })
+        } catch (err) {
+          // An aborted request is the user interrupting, not a failure worth
+          // reporting as one.
+          if (request.signal?.aborted) return
+          yield { type: 'error', message: `Network error: ${(err as Error).message}` }
+          return
+        }
+
+        if (response.ok && response.body) break outer
+
+        lastStatus = response.status
+        lastDetail = await response.text().catch(() => '')
+        response = null
+
+        // A non-retryable status is a fault this model will keep returning —
+        // but a RETIRED model (404) is worth trying the next candidate for.
+        if (!RETRYABLE.has(lastStatus)) break
+
+        if (attempt < MAX_ATTEMPTS - 1) {
+          // Backoff. Retrying a saturated endpoint immediately just rejoins the
+          // queue that rejected the first attempt.
+          await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS * 2 ** attempt))
+        }
       }
 
-      if (response.ok && response.body) break
-
-      lastStatus = response.status
-      lastDetail = await response.text().catch(() => '')
-      response = null
-
-      if (!RETRYABLE.has(lastStatus) || attempt === MAX_ATTEMPTS - 1) break
-
-      // Exponential backoff. Retrying a demand spike immediately just joins the
-      // same queue that rejected the first attempt.
-      await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS * 2 ** attempt))
+      // Out of quota or saturated on this model — try the next one rather than
+      // hammering the one that just refused.
+      if (!RETRYABLE.has(lastStatus) && lastStatus !== 404) break
     }
 
     if (!response?.body) {
@@ -256,9 +285,10 @@ export class GeminiBrain implements Brain {
       yield {
         type: 'error',
         message: overloaded
-          ? // Say what it is rather than leaking a raw status: this one is not
-            // the user's fault and not fixable by them.
-            'Gemini is busy right now — that is temporary. Try again in a moment.'
+          ? // Say what it is rather than leaking a raw status: this is not the
+            // user's fault and not fixable by them. Every fallback was tried.
+            'Every Gemini model is rate-limited or busy right now. This is a quota' +
+            ' limit on the key, not a fault — try again shortly.'
           : `Gemini returned ${lastStatus}. ${lastDetail.slice(0, 180)}`,
       }
       return

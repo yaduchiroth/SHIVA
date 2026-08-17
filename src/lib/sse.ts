@@ -5,22 +5,32 @@
  * adapter and once in the browser client — and the second copy is exactly the
  * kind of thing that gets fixed in one place and left broken in the other.
  *
- * The bug: SSE frames are separated by a blank line, so a naive reader splits on
- * `\n\n` and keeps the tail as an incomplete frame. But the FINAL frame has no
- * trailing separator, and a short response frequently arrives as a single chunk
- * that is entirely "final" — so the tail is a complete frame, not a partial one.
- * Discarding it at end-of-stream silently dropped whole responses: the request
- * succeeded, the buffer held the entire reply, and the parser reported nothing.
+ * Two separate failures live here, both of which silently truncate a response
+ * rather than erroring:
  *
- * `flush()` exists solely to make forgetting that impossible.
+ * 1. **Line endings.** The SSE spec permits LF, CRLF or CR. Gemini uses CRLF,
+ *    so a reader splitting on `'\n\n'` finds no separator at all — the whole
+ *    stream stays one unsplittable blob and only its first event is ever read.
+ *    A 33-frame reply arrived as a single truncated word.
+ * 2. **The final frame.** The last frame carries no trailing separator, and a
+ *    short reply often arrives as one chunk that is entirely "final". Treating
+ *    the tail as always-partial discarded whole responses: request succeeded,
+ *    buffer held the answer, parser reported nothing.
+ *
+ * `flush()` exists to make forgetting the second impossible; the regex handles
+ * the first. Both were found by comparing frame counts against the raw upstream
+ * — neither produces an error to notice.
  */
+
+/** Frame separator: a blank line, in any of the three legal line endings. */
+const SEPARATOR = /\r\n\r\n|\n\n|\r\r/
 export class SseFramer {
   private buffer = ''
 
   /** Feeds a decoded chunk and returns the frames that are now complete. */
   push(chunk: string): string[] {
     this.buffer += chunk
-    const frames = this.buffer.split('\n\n')
+    const frames = this.buffer.split(SEPARATOR)
     // The last element is either a partial frame or an empty string; either way
     // it is not yet complete.
     this.buffer = frames.pop() ?? ''
@@ -36,14 +46,23 @@ export class SseFramer {
 }
 
 /**
- * Extracts the JSON payload from a frame's `data:` line.
+ * Extracts the JSON payload from a frame's `data:` lines.
+ *
+ * The spec allows a single event to carry several `data:` lines, which are
+ * concatenated with newlines. Reading only the first would truncate any such
+ * event — and since the previous line-ending bug made whole streams arrive as
+ * one "frame", reading only the first line is exactly how a 33-event response
+ * became a single word.
  *
  * @returns the payload, or null for comments, keep-alives and terminators.
  */
 export function sseData(frame: string): string | null {
-  const line = frame.split('\n').find((l) => l.startsWith('data:'))
-  if (!line) return null
-  const payload = line.slice(5).trim()
+  const payload = frame
+    .split(/\r\n|\n|\r/)
+    .filter((l) => l.startsWith('data:'))
+    .map((l) => l.slice(5).trim())
+    .join('\n')
+    .trim()
   if (!payload || payload === '[DONE]') return null
   return payload
 }

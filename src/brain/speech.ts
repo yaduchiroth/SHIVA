@@ -97,15 +97,81 @@ export function extractWakeCommand(transcript: string): string | null {
   return transcript.slice(match.index + match[0].length).replace(/^[\s,.:;!?-]+/, '')
 }
 
+/** Playback handle for neural audio, so a new utterance can stop the old one. */
+let currentSource: AudioBufferSourceNode | null = null
+let audioContext: AudioContext | null = null
+
 /**
- * Speaks text aloud.
+ * Speaks text using neural TTS, falling back to the browser.
+ *
+ * The browser's own voices are the reason an assistant sounds synthetic: flat
+ * prosody, wrong emphasis, no sense of a sentence. Neural audio fixes that, at
+ * the cost of latency — nothing plays until the whole utterance is generated.
+ *
+ * So the fallback is not a lesser path, it is the *fast* path: if the neural
+ * request fails or the key is absent, speaking still happens immediately rather
+ * than not at all.
+ */
+export async function speakNeural(text: string, voice?: string): Promise<boolean> {
+  const trimmed = text.trim()
+  if (!trimmed || typeof window === 'undefined') return false
+
+  try {
+    const res = await fetch('/api/speech', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: trimmed, voice }),
+    })
+    if (!res.ok) return false
+
+    const { audio, sampleRate } = (await res.json()) as { audio: string; sampleRate: number }
+    if (!audio) return false
+
+    // base64 → bytes → signed 16-bit samples → float. The model returns raw
+    // PCM with no container, so decodeAudioData can't be used directly.
+    const binary = atob(audio)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+
+    const samples = new Int16Array(bytes.buffer)
+    const Ctor =
+      window.AudioContext ??
+      (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctor) return false
+
+    audioContext ??= new Ctor()
+    if (audioContext.state === 'suspended') await audioContext.resume()
+
+    const buffer = audioContext.createBuffer(1, samples.length, sampleRate || 24000)
+    const channel = buffer.getChannelData(0)
+    // Int16 → normalised float. 32768 rather than 32767: the negative range is
+    // one larger, and dividing by 32767 clips the loudest negative sample.
+    for (let i = 0; i < samples.length; i++) channel[i] = samples[i]! / 32768
+
+    stopSpeaking()
+    const source = audioContext.createBufferSource()
+    source.buffer = buffer
+    source.connect(audioContext.destination)
+    source.onended = () => {
+      if (currentSource === source) currentSource = null
+    }
+    source.start()
+    currentSource = source
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Speaks text with the browser's built-in synthesis.
  *
  * Two behaviours worth knowing: `speechSynthesis` queues rather than replaces,
  * so a new utterance must cancel the old one or replies pile up and talk over
  * each other; and voice lists load asynchronously in Chrome, so the first call
  * after page load may find none — which is fine, the default voice is used.
  */
-export function speak(text: string, { rate = 1.05, pitch = 0.95 } = {}): void {
+export function speak(text: string, { rate = 1.02, pitch = 1.0 } = {}): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   const trimmed = text.trim()
   if (!trimmed) return
@@ -117,23 +183,53 @@ export function speak(text: string, { rate = 1.05, pitch = 0.95 } = {}): void {
   utterance.pitch = pitch
   utterance.volume = 0.9
 
-  // Prefer a local voice: remote ones introduce a network round-trip before
-  // any sound, which is the opposite of what a responsive assistant needs.
+  // Voice choice matters more than any parameter here. macOS ships genuinely
+  // good voices behind names the generic heuristics miss — the Premium and
+  // Enhanced variants are a different class from the default Alex/Fred, and
+  // "Siri" voices are better still. Ordered best-first.
   const voices = window.speechSynthesis.getVoices()
-  const preferred =
-    voices.find(
-      (v) => v.localService && /en-(GB|US)/.test(v.lang) && /natural|neural/i.test(v.name),
-    ) ??
-    voices.find((v) => v.localService && /en-(GB|US)/.test(v.lang)) ??
-    voices.find((v) => v.lang.startsWith('en'))
+  const byPreference = [
+    /siri/i,
+    /(premium|enhanced)/i,
+    /(natural|neural)/i,
+    /(samantha|serena|karen|daniel|moira)/i,
+  ]
+  let preferred: SpeechSynthesisVoice | undefined
+  for (const pattern of byPreference) {
+    preferred = voices.find((v) => v.lang.startsWith('en') && pattern.test(v.name))
+    if (preferred) break
+  }
+  // Fall back to any local English voice: remote ones add a network round-trip
+  // before any sound, which is the opposite of responsive.
+  preferred ??= voices.find((v) => v.localService && v.lang.startsWith('en'))
+  preferred ??= voices.find((v) => v.lang.startsWith('en'))
   if (preferred) utterance.voice = preferred
 
   window.speechSynthesis.speak(utterance)
 }
 
 export function stopSpeaking(): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return
-  window.speechSynthesis.cancel()
+  if (typeof window === 'undefined') return
+  window.speechSynthesis?.cancel()
+  if (currentSource) {
+    try {
+      currentSource.stop()
+    } catch {
+      // Already finished; nothing to stop.
+    }
+    currentSource = null
+  }
+}
+
+/**
+ * Speaks, preferring neural audio and falling back to the browser.
+ *
+ * The fallback is synchronous on purpose: if neural synthesis is going to fail,
+ * it should fail into speech rather than into silence.
+ */
+export async function say(text: string, voice?: string): Promise<void> {
+  const spoken = await speakNeural(text, voice)
+  if (!spoken) speak(text)
 }
 
 export const isSynthesisSupported = (): boolean =>

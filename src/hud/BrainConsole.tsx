@@ -5,7 +5,7 @@ import { useBrainStore } from '@/core/store/useBrainStore'
 import { useBrain } from '@/brain/useBrain'
 import { useVoice } from '@/brain/useVoice'
 import { on } from '@/core/events/bus'
-import { speak } from '@/brain/speech'
+import { say } from '@/brain/speech'
 
 /**
  * The conversational surface.
@@ -48,7 +48,7 @@ export function BrainConsole() {
     if (last?.role !== 'assistant') return
     if (spokenFor.current === last.content) return
     spokenFor.current = last.content
-    speak(last.content)
+    void say(last.content)
   }, [phase])
 
   const submit = useCallback(

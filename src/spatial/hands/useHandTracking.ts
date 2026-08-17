@@ -23,6 +23,9 @@ import { setTrackingVideo } from './videoSource'
  * loader that has no business in the initial bundle — the OS must boot and be
  * interactive before anyone decides whether to grant camera access.
  */
+/** Hands absent for this long hands control back to the pointer. */
+const HANDS_ABSENT_MS = 2500
+
 export function useHandTracking() {
   const setStatus = useGestureStore((s) => s.setStatus)
   const setInputMode = useGestureStore((s) => s.setInputMode)
@@ -49,6 +52,8 @@ export function useHandTracking() {
   const lastInference = useRef(0)
   const lastReport = useRef(0)
   const lastHandCount = useRef(0)
+  /** When hands were last seen — drives the fallback to pointer control. */
+  const lastSeenHands = useRef(0)
 
   const stop = useCallback(() => {
     running.current = false
@@ -230,6 +235,23 @@ export function useHandTracking() {
 
       const count = (seen.left ? 1 : 0) + (seen.right ? 1 : 0)
       handFrame.count = count
+
+      // Hand up: hands drive. Hands gone for a few seconds: give the mouse back.
+      //
+      // Without this, tracking stays authoritative forever once started, so a
+      // user who steps away — or whose hands simply aren't detected — is left
+      // with an interface that responds to neither hands nor pointer. Tracking
+      // keeps running; only who is allowed to drive changes.
+      if (count > 0) {
+        lastSeenHands.current = now
+        if (useGestureStore.getState().inputMode !== 'hand') setInputMode('hand')
+      } else if (
+        lastSeenHands.current > 0 &&
+        now - lastSeenHands.current > HANDS_ABSENT_MS &&
+        useGestureStore.getState().inputMode === 'hand'
+      ) {
+        setInputMode('pointer')
+      }
 
       // Store writes are throttled to ~4 Hz: the HUD is the only consumer and
       // it can't meaningfully show more.

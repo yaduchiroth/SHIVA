@@ -100,6 +100,28 @@ export function useInteractionDriver() {
     }
   }, [focus, setIdle])
 
+  // Watchdog: nothing may stay grabbed while no hand is present.
+  //
+  // Belt and braces on top of the recognizer emitting `gesture:end` when it
+  // resets. Any future path that loses a hand without going through the
+  // recognizer — a camera unplugged, tracking stopped, a permission revoked
+  // mid-pinch — would otherwise leave a panel held with no way to let go. The
+  // cost of being wrong here is asymmetric: a spurious release is a minor
+  // annoyance, a stuck grab makes the interface unusable.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const state = useSpatialStore.getState()
+      if (state.grabbed === null) return
+      if (useGestureStore.getState().inputMode !== 'hand') return
+
+      const hand = getPrimaryHand()
+      if (hand?.visible) return
+
+      emit('panel:release', { index: state.grabbed, velocity: { x: 0, y: 0, z: 0 } })
+    }, 400)
+    return () => clearInterval(timer)
+  }, [])
+
   // Focus is set from several places (gesture, click, keyboard), so the
   // corresponding events are published from one subscription to the store
   // rather than at each call site, where one would inevitably be missed.

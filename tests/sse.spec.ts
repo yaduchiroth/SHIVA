@@ -59,6 +59,40 @@ test.describe('SseFramer', () => {
   })
 })
 
+test.describe('line endings', () => {
+  // The failure that truncated real responses: Gemini separates frames with
+  // CRLF, and a reader splitting on '\n\n' finds no separator whatsoever. The
+  // entire stream stays one blob and only its first event is ever read.
+  test('splits CRLF-separated frames', () => {
+    const framer = new SseFramer()
+    expect(framer.push('data: {"a":1}\r\n\r\ndata: {"a":2}\r\n\r\n')).toEqual([
+      'data: {"a":1}',
+      'data: {"a":2}',
+    ])
+  })
+
+  test('splits bare-CR frames', () => {
+    const framer = new SseFramer()
+    expect(framer.push('data: {"a":1}\r\rdata: {"a":2}\r\r')).toEqual([
+      'data: {"a":1}',
+      'data: {"a":2}',
+    ])
+  })
+
+  test('a many-frame CRLF stream is not collapsed to its first event', () => {
+    // Precisely the shape that arrived as a single truncated word.
+    const framer = new SseFramer()
+    const stream = Array.from({ length: 33 }, (_, i) => `data: {"i":${i}}`).join('\r\n\r\n')
+    const frames = [...framer.push(stream), ...framer.flush()]
+    expect(frames).toHaveLength(33)
+    expect(sseData(frames[32]!)).toBe('{"i":32}')
+  })
+
+  test('reads CRLF data lines', () => {
+    expect(sseData('id: 1\r\ndata: {"ok":true}\r\n')).toBe('{"ok":true}')
+  })
+})
+
 test.describe('sseData', () => {
   test('extracts the payload', () => {
     expect(sseData('data: {"a":1}')).toBe('{"a":1}')
@@ -74,5 +108,10 @@ test.describe('sseData', () => {
 
   test('finds the data line among other fields', () => {
     expect(sseData('id: 7\nevent: message\ndata: {"ok":true}')).toBe('{"ok":true}')
+  })
+
+  test('concatenates multi-line data, as the spec allows', () => {
+    // Reading only the first line here truncates any multi-line event.
+    expect(sseData('data: {"a":1,\ndata: "b":2}')).toBe('{"a":1,\n"b":2}')
   })
 })

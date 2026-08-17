@@ -75,6 +75,11 @@ Three ways in, all equal:
   phrase is required so the microphone can stay on without every remark in the
   room becoming a prompt. Chromium-based browsers only; Firefox has no
   `SpeechRecognition`.
+
+  Replies are spoken with Gemini's neural TTS, which is a different class from
+  the browser's built-in voices. If that request fails the browser voice takes
+  over immediately — the fallback is the _fast_ path, so speech still happens.
+
 - **Circle gesture** — point one finger and draw a circle in the air. Opens the
   input without touching anything.
 - **Type** — press `/`.
@@ -87,6 +92,12 @@ apart.
 It also reads live data before answering: "how's my frame rate", "what's the
 weather", "how many PRs are open" all call `read_module` and answer from the
 same numbers the panel is showing, rather than from memory.
+
+**If a model is rate-limited it falls through.** On a free-tier key the flagship
+flash models are regularly at quota (429) or saturated (503) while the lite
+models answer instantly. SHIVA tries the preferred model, then falls back,
+rather than failing — the difference between "occasionally less sharp" and
+"randomly broken".
 
 It will not invent data. Unconnected sources are declared as such in the system
 prompt. Asked "what is my stock portfolio worth today?" it answers _"the markets

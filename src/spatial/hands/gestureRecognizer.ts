@@ -39,6 +39,19 @@ export interface Landmark {
 const dist = (a: Landmark, b: Landmark): number =>
   Math.hypot(a.x - b.x, a.y - b.y, (a.z - b.z) * 0.5)
 
+/**
+ * Fingertip-to-wrist distance, in palm widths, above which a finger counts as
+ * straight and below which it counts as folded.
+ *
+ * The gap between them is a deliberate dead zone. A hand hanging naturally
+ * lands inside it, so no gesture fires — which is what stops the interface
+ * reacting to someone who is simply resting. Widening the gap costs
+ * sensitivity; narrowing it costs false positives. These values leave roughly
+ * 20% margin either side of a relaxed hand.
+ */
+const EXTENDED = 1.7
+const CURLED = 1.35
+
 /** How much fingertip history the circle detector considers, in seconds. */
 const CIRCLE_WINDOW_S = 1.6
 
@@ -120,17 +133,21 @@ export class HandRecognizer {
   // nearest non-pinch pose is a point at ~1.30, so this is a wide margin.
   private readonly pinchGate = new Schmitt(0.32, 0.45)
 
-  // Grab keys off the FURTHEST extended fingertip, not the mean. The mean can't
-  // separate a fist (0.88) from a point (1.20) — one extended finger barely
-  // moves an average of four. The maximum separates them completely: a fist's
-  // furthest fingertip is at 0.88, a point's is at 2.15.
-  private readonly grabGate = new Schmitt(1.1, 1.35)
-
-  // Openness is normalised against a fully-splayed hand. The margin that matters
-  // is against a *relaxed* hand — fingers loosely curled, the default resting
-  // pose — which measures 0.69 against an open palm's 0.96. Treating that as an
-  // open palm made resting hands arm accidental swipes.
-  private readonly palmGate = new Schmitt(0.9, 0.8)
+  // Grab and palm are gated on HOW MANY fingers are folded or straight, not on
+  // an aggregate ratio.
+  //
+  // Aggregates were the mistake in the previous version: they demand that a
+  // real hand match a specific numeric profile, and hands vary enormously —
+  // finger length, how far someone actually straightens, how close to the camera
+  // they hold it. Counting fingers is robust to all of that, because each finger
+  // only has to land clearly on one side of a wide dead zone rather than hit a
+  // precise value.
+  //
+  // Three of four is deliberate for both. Requiring all four means one stiff
+  // pinky, or one fingertip the model placed badly, silently kills the gesture —
+  // which is what "doesn't follow my gestures" feels like from the outside.
+  private readonly grabGate = new Schmitt(2.5, 1.5)
+  private readonly palmGate = new Schmitt(2.5, 1.5)
 
   private lastPosition: Vec3 = { x: 0, y: 0, z: 0 }
   private lastTimestamp = 0
@@ -144,7 +161,24 @@ export class HandRecognizer {
 
   constructor(private readonly handedness: Handedness) {}
 
+  /**
+   * Clears all state — called when the hand leaves the frame.
+   *
+   * Emitting `gesture:end` here is not optional. MediaPipe drops detection
+   * constantly: a hand moving fast, turning edge-on, or crossing a shadow can
+   * vanish for a frame or two. Without this, a pinch that started before the
+   * dropout never ends, so the panel stays grabbed forever and — because input
+   * mode is still 'hand' — the pointer cannot rescue you either. That is
+   * precisely the "won't leave grab mode" failure.
+   */
   reset(): void {
+    if (this.activeGesture !== 'idle') {
+      emit('gesture:end', {
+        hand: this.handedness,
+        gesture: this.activeGesture,
+        position: { ...this.lastPosition },
+      })
+    }
     this.palmFilter.reset()
     this.tipFilter.reset()
     this.pinchFilter.reset()
@@ -221,9 +255,9 @@ export class HandRecognizer {
     out.pinch = clamp(1 - pinchRatio / 0.6, 0, 1)
 
     // ── Finger extension ─────────────────────────────────────────────────────
-    // Each fingertip's distance from the wrist, over palm scale. Everything
-    // below is derived from these, so the whole classifier is scale-invariant:
-    // the same gesture reads identically near the camera or far from it.
+    // Each fingertip's distance from the wrist, over palm scale — so the whole
+    // classifier is scale-invariant: the same gesture reads identically near the
+    // camera or far from it.
     const extension = [
       dist(indexTip, wrist) / scale,
       dist(middleTip, wrist) / scale,
@@ -231,31 +265,44 @@ export class HandRecognizer {
       dist(pinkyTip, wrist) / scale,
     ]
     const meanExtension = (extension[0]! + extension[1]! + extension[2]! + extension[3]!) / 4
-    const maxExtension = Math.max(extension[0]!, extension[1]!, extension[2]!, extension[3]!)
+
+    // Each finger is straight, folded, or neither. The gap between the two
+    // thresholds is the point: a hand resting naturally sits inside it and
+    // resolves to no gesture at all, so SHIVA doesn't react to someone who
+    // isn't asking for anything.
+    let extendedCount = 0
+    let curledCount = 0
+    for (const e of extension) {
+      if (e > EXTENDED) extendedCount++
+      else if (e < CURLED) curledCount++
+    }
 
     // ── Grab ─────────────────────────────────────────────────────────────────
-    // Gated on the furthest fingertip: a fist requires that EVERY finger is in,
-    // and one straight finger is enough to disqualify it. Using the mean here
-    // let a pointing hand drift into grab territory.
-    const grabRatio = this.grabFilter.filter(maxExtension, timestamp)
+    // A fist is not merely "several fingers folded" — it is "nothing sticking
+    // out". Counting folds alone classified a POINT as a grab, since pointing
+    // folds three fingers too. Each extended finger therefore counts double
+    // against the score, which separates them decisively: a fist scores 4, a
+    // point scores 1, and the gate sits between.
+    //
+    // Filtered before gating so one bad frame from the landmarker can't flip
+    // it, with hysteresis on top.
+    const closedness = curledCount - extendedCount * 2
+    const grabRatio = this.grabFilter.filter(closedness, timestamp)
     const grabbing = this.grabGate.update(grabRatio)
-    // Reported as 0..1 closedness so a cursor can respond continuously, before
-    // the gate trips.
-    out.grab = clamp(1 - (grabRatio - 0.88) / 1.3, 0, 1)
+    // Continuous 0..1 closedness so the cursor responds before the gate trips.
+    out.grab = clamp(curledCount / 4, 0, 1)
 
     // ── Open palm ────────────────────────────────────────────────────────────
-    // Normalised against a fully-splayed hand (~2.2 palm scales).
-    const openness = clamp(meanExtension / 2.2, 0, 1)
-    const palmOpen = this.palmGate.update(openness)
-    out.openness = openness
+    const palmOpen = this.palmGate.update(extendedCount)
+    out.openness = clamp(extendedCount / 4, 0, 1)
+    void meanExtension
 
     // ── Point ────────────────────────────────────────────────────────────────
-    // Index extended while the other three are curled. Both halves are needed:
-    // an open palm also has an extended index, and a fist also has the other
-    // three curled.
-    const indexExtended = extension[0]! > 1.6
-    const othersCurled = (extension[1]! + extension[2]! + extension[3]!) / 3 < 1.35
-    const pointing = indexExtended && othersCurled && !pinching
+    // Index straight with middle and ring folded. The pinky is deliberately
+    // ignored: plenty of people point with it half-raised, and demanding it be
+    // folded rejects a perfectly clear pointing hand.
+    const pointing =
+      extension[0]! > EXTENDED && extension[1]! < CURLED && extension[2]! < CURLED && !pinching
 
     // ── Resolve to one gesture ───────────────────────────────────────────────
     // Priority matters: a pinch is a subset of many hand shapes, so it must be
