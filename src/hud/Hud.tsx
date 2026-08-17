@@ -179,9 +179,7 @@ export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
             Enable hand tracking
           </button>
         )}
-        {reason && (
-          <span className="text-hud-label mt-1 text-right normal-case">{reason}</span>
-        )}
+        {reason && <span className="text-hud-label mt-1 text-right normal-case">{reason}</span>}
       </div>
 
       {/* ── Gesture legend, bottom-centre ────────────────────────────────── */}

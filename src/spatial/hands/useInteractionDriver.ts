@@ -155,7 +155,12 @@ export function usePointerFallback(enabled: boolean) {
 
     const onPointerDown = (e: PointerEvent) => {
       const state = useSpatialStore.getState()
-      drag.current = { x: e.clientX, time: performance.now(), startIndex: state.index, moved: false }
+      drag.current = {
+        x: e.clientX,
+        time: performance.now(),
+        startIndex: state.index,
+        moved: false,
+      }
       setIdle(false)
 
       // Hold-to-grab is on a timer rather than a distance threshold. Using

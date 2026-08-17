@@ -65,11 +65,7 @@ interface Props {
   fadeDistance?: number
 }
 
-export function InfiniteGrid({
-  color = '#2a2a31',
-  accent = '#7c9cff',
-  fadeDistance = 42,
-}: Props) {
+export function InfiniteGrid({ color = '#2a2a31', accent = '#7c9cff', fadeDistance = 42 }: Props) {
   const material = useRef<THREE.ShaderMaterial>(null)
 
   const uniforms = useMemo(

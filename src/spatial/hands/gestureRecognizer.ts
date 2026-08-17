@@ -141,7 +141,10 @@ export class HandRecognizer {
     // Mean fingertip-to-wrist distance: a closed fist pulls every tip inward,
     // which distinguishes it from a pinch (only thumb and index move).
     const curl =
-      (dist(indexTip, wrist) + dist(middleTip, wrist) + dist(ringTip, wrist) + dist(pinkyTip, wrist)) /
+      (dist(indexTip, wrist) +
+        dist(middleTip, wrist) +
+        dist(ringTip, wrist) +
+        dist(pinkyTip, wrist)) /
       (4 * scale)
     const grabRatio = this.grabFilter.filter(curl, timestamp)
     const grabbing = this.grabGate.update(grabRatio)

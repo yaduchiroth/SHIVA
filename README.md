@@ -29,23 +29,23 @@ report the camera as unavailable.
 
 ### Controls
 
-| | Hand | Pointer |
-| --- | --- | --- |
-| Rotate | Swipe | Drag, scroll, or ← → |
-| Grab | Pinch | Press and hold |
-| Expand | Fist | Click, Enter |
-| Dismiss | Open palm | Escape |
+|         | Hand      | Pointer              |
+| ------- | --------- | -------------------- |
+| Rotate  | Swipe     | Drag, scroll, or ← → |
+| Grab    | Pinch     | Press and hold       |
+| Expand  | Fist      | Click, Enter         |
+| Dismiss | Open palm | Escape               |
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Development server |
-| `npm run build` | Production build |
-| `npm run typecheck` | TypeScript, no emit |
-| `npm run lint` | ESLint |
-| `npm test` | Playwright render + performance suite |
-| `npm run assets` | Re-fetch MediaPipe assets |
+| Command             | Purpose                               |
+| ------------------- | ------------------------------------- |
+| `npm run dev`       | Development server                    |
+| `npm run build`     | Production build                      |
+| `npm run typecheck` | TypeScript, no emit                   |
+| `npm run lint`      | ESLint                                |
+| `npm test`          | Playwright render + performance suite |
+| `npm run assets`    | Re-fetch MediaPipe assets             |
 
 ### Quality override
 
@@ -66,7 +66,7 @@ src/audio/              procedural Web Audio engine
 src/adapters/           Phase 2/3 seams (Gemini, Calendar, Gmail, GitHub)
 ```
 
-Two design decisions worth knowing before reading the code:
+Three design decisions worth knowing before reading the code:
 
 **State is split by update frequency.** Continuous hand data mutates a
 singleton (`src/core/hands/handFrame.ts`) read inside the render loop; discrete

@@ -1,11 +1,11 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { AdaptiveDpr, Preload } from '@react-three/drei'
 import * as THREE from 'three'
 import { getQuality } from '@/core/config/quality'
-import { getDeviceProfile } from '@/lib/device'
+import { getDeviceProfile, isCaptureEnabled } from '@/lib/device'
 import { useSystemStore } from '@/core/store/useSystemStore'
 import { Environment } from './environment/Environment'
 import { EffectStack } from './effects/EffectStack'
@@ -27,6 +27,8 @@ export function Stage() {
   const reducedMotion = useSystemStore((s) => s.reducedMotion)
   const initDevice = useSystemStore((s) => s.initDevice)
   const quality = getQuality(tier)
+  // Read once at mount: changing it later would require recreating the context.
+  const [capture] = useState(isCaptureEnabled)
 
   useEffect(() => {
     const profile = getDeviceProfile()
@@ -49,8 +51,10 @@ export function Stage() {
         antialias: false, // The composer's multisampling handles this; both is waste.
         alpha: false,
         powerPreference: 'high-performance',
-        // Guarantees a readable framebuffer for the Playwright pixel assertions.
-        preserveDrawingBuffer: true,
+        // Off by default: preserving the buffer blocks a driver optimisation and
+        // costs frames. Enabled only via `?capture=1`, for screenshots and the
+        // suite's pixel assertions.
+        preserveDrawingBuffer: capture,
       }}
       onCreated={({ gl, scene }) => {
         // ACES is what makes emissive highlights roll off instead of clipping to

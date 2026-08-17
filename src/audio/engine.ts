@@ -36,7 +36,9 @@ export class AudioEngine {
     }
 
     try {
-      const Ctor = window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      const Ctor =
+        window.AudioContext ??
+        (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!Ctor) return false
 
       const ctx = new Ctor()

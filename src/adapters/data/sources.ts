@@ -1,10 +1,4 @@
-import type {
-  CalendarEvent,
-  DataResult,
-  DataSource,
-  MailSummary,
-  RepoSummary,
-} from './types'
+import type { CalendarEvent, DataResult, DataSource, MailSummary, RepoSummary } from './types'
 
 /**
  * Phase 3 source stubs.
@@ -17,7 +11,7 @@ import type {
  * fresh, so Phase 3 starts from decisions rather than from research.
  */
 
-const unconfigured = <T,>(requires: readonly string[]): DataResult<T> => ({
+const unconfigured = <T>(requires: readonly string[]): DataResult<T> => ({
   status: 'unconfigured',
   missing: requires.filter((key) => !process.env[key]),
 })

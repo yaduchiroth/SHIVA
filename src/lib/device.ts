@@ -51,7 +51,9 @@ export function getDeviceProfile(): DeviceProfile {
     (navigator.maxTouchPoints > 1 && /macintosh/i.test(navigator.userAgent))
   const cores = navigator.hardwareConcurrency ?? 4
   const memoryGB =
-    'deviceMemory' in navigator ? ((navigator as { deviceMemory?: number }).deviceMemory ?? null) : null
+    'deviceMemory' in navigator
+      ? ((navigator as { deviceMemory?: number }).deviceMemory ?? null)
+      : null
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   cached = {
@@ -111,6 +113,19 @@ function pickTier(p: {
   if (/(intel|uhd|iris)/.test(r)) return 'medium'
 
   return p.cores >= 8 ? 'high' : 'medium'
+}
+
+/**
+ * Whether the framebuffer should be readable outside a frame callback.
+ *
+ * `preserveDrawingBuffer` stops the driver from discarding the buffer after
+ * each present, which costs real performance on some GPUs. It's needed only to
+ * screenshot or pixel-sample the canvas, so it's opt-in via `?capture=1` rather
+ * than a permanent tax on every user to make testing convenient.
+ */
+export function isCaptureEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('capture') === '1'
 }
 
 /** Secure context is a hard requirement for getUserMedia outside localhost. */

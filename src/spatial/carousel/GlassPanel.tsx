@@ -110,10 +110,7 @@ export function GlassPanel({
 
   const geometry = useMemo(() => makePanelGeometry(), [])
   const texture = useMemo(() => createPanelTexture(module, index), [module, index])
-  const accentColor = useMemo(
-    () => new THREE.Color(resolveColor(module.accent)),
-    [module.accent],
-  )
+  const accentColor = useMemo(() => new THREE.Color(resolveColor(module.accent)), [module.accent])
 
   // Neither the geometry nor the canvas texture is created by R3F's reconciler,
   // so neither is disposed automatically.

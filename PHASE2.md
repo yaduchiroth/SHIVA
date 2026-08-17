@@ -28,11 +28,13 @@ than a hard-coded particle count.
 ## The work
 
 ### 1. Server route
+
 `app/api/brain/route.ts`, streaming SSE. `GEMINI_API_KEY` must stay server-side —
 it is deliberately not `NEXT_PUBLIC_`. Phase 1 sets COEP headers globally
 (`next.config.ts`), which is worth remembering if you add any cross-origin fetch.
 
 ### 2. Voice
+
 Web Speech API for STT and TTS gets you working voice with zero dependencies.
 Two things to plan for:
 
@@ -46,6 +48,7 @@ For genuinely realtime conversation, the Gemini Live API's bidirectional audio
 is a better fit than STT→text→TTS, at the cost of a WebSocket session to manage.
 
 ### 3. Wake phrase and circle gesture
+
 "SHIVA" as a wake word via continuous recognition. The circle gesture wants a
 new recognizer in `src/spatial/hands/gestureRecognizer.ts`: buffer index-tip
 positions over ~1.5s and test for angular coverage exceeding 2π with a roughly
@@ -53,12 +56,14 @@ constant radius. Follow the existing pattern — filter first, then threshold wi
 hysteresis, or it will trigger constantly during ordinary movement.
 
 ### 4. Holographic response text
+
 Particles assembling into glyphs. `src/spatial/environment/Particulate.tsx` has
 the GPU-side pattern to follow: motion as a closed-form function of time in the
 vertex shader, never per-frame JS buffer writes. Sample glyph coverage from a
 Canvas2D render (same approach as `panelTexture.ts`) to get target positions.
 
 ### 5. Command engine
+
 Tool definitions per module. The `ModuleDescriptor.liveIn` field already records
 which modules have real data — the brain should refuse to answer questions about
 modules whose sources land in Phase 3 rather than inventing plausible numbers.

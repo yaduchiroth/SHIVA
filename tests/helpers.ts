@@ -14,8 +14,12 @@ import type { Page } from '@playwright/test'
  * real GPU behind the canvas.
  */
 
-/** Tier is pinned so the runtime governor can't shift quality mid-measurement. */
-export const APP_URL = '/?quality=low'
+/**
+ * `quality=low` pins the tier so the governor can't shift it mid-measurement;
+ * `capture=1` makes the framebuffer readable, which is off in normal use
+ * because preserving it costs frames.
+ */
+export const APP_URL = '/?quality=low&capture=1'
 
 export async function bootApp(page: Page): Promise<void> {
   await page.goto(APP_URL)
@@ -115,7 +119,8 @@ export async function sampleFrames(page: Page, ms: number): Promise<FrameReport>
     })
 
     const samples = deltas.slice(1).sort((a, b) => a - b)
-    const at = (q: number) => samples[Math.min(samples.length - 1, Math.floor(samples.length * q))] ?? 0
+    const at = (q: number) =>
+      samples[Math.min(samples.length - 1, Math.floor(samples.length * q))] ?? 0
 
     return {
       frames: samples.length,
