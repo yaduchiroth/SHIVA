@@ -9,7 +9,8 @@ import { useHandTracking } from '@/spatial/hands/useHandTracking'
 import { useInteractionDriver, usePointerFallback } from '@/spatial/hands/useInteractionDriver'
 import { useAudioEngine } from '@/audio/useAudioEngine'
 import { useSystemStore } from '@/core/store/useSystemStore'
-import { getDeviceProfile } from '@/lib/device'
+import { getDeviceProfile, isHandDebugEnabled } from '@/lib/device'
+import { HandDebugOverlay } from '@/hud/HandDebugOverlay'
 
 /**
  * Top-level composition.
@@ -20,6 +21,7 @@ import { getDeviceProfile } from '@/lib/device'
  */
 export function Shell() {
   const [webglFailed, setWebglFailed] = useState(false)
+  const [handDebug] = useState(isHandDebugEnabled)
   const boot = useSystemStore((s) => s.boot)
   const setBoot = useSystemStore((s) => s.setBoot)
 
@@ -57,6 +59,7 @@ export function Shell() {
     <main className="relative h-full w-full">
       <Stage />
       <Hud onEnableTracking={startTracking} />
+      {handDebug && <HandDebugOverlay />}
       <BootSequence onComplete={handleBootComplete} />
       {/* Test anchor: marks the point at which the OS is interactive. */}
       {boot === 'ready' && <div data-testid="os-ready" hidden />}

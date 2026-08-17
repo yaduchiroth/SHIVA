@@ -48,11 +48,27 @@ export class HandRecognizer {
   private readonly pinchFilter = new OneEuroFilter({ minCutoff: 2.4, beta: 0.01 })
   private readonly grabFilter = new OneEuroFilter({ minCutoff: 2.0, beta: 0.01 })
 
-  // Pinch/grab trigger when the value falls BELOW the enter threshold, so
-  // enter < exit here (see Schmitt).
+  // Every threshold below is measured, not guessed — see tests/calibrate.spec.ts,
+  // which prints these ratios for a set of anatomically-proportioned poses.
+  //
+  // Pinch and grab trigger when their value falls BELOW the enter threshold, so
+  // enter < exit for those (see Schmitt). Open palm triggers on the way up.
+
+  // Thumb-to-index distance over palm scale. Pinching measures ~0.03; the
+  // nearest non-pinch pose is a point at ~1.30, so this is a wide margin.
   private readonly pinchGate = new Schmitt(0.32, 0.45)
-  private readonly grabGate = new Schmitt(0.55, 0.72)
-  private readonly palmGate = new Schmitt(0.78, 0.66)
+
+  // Grab keys off the FURTHEST extended fingertip, not the mean. The mean can't
+  // separate a fist (0.88) from a point (1.20) — one extended finger barely
+  // moves an average of four. The maximum separates them completely: a fist's
+  // furthest fingertip is at 0.88, a point's is at 2.15.
+  private readonly grabGate = new Schmitt(1.1, 1.35)
+
+  // Openness is normalised against a fully-splayed hand. The margin that matters
+  // is against a *relaxed* hand — fingers loosely curled, the default resting
+  // pose — which measures 0.69 against an open palm's 0.96. Treating that as an
+  // open palm made resting hands arm accidental swipes.
+  private readonly palmGate = new Schmitt(0.9, 0.8)
 
   private lastPosition: Vec3 = { x: 0, y: 0, z: 0 }
   private lastTimestamp = 0
@@ -137,29 +153,41 @@ export class HandRecognizer {
     // distance — it can drive a cursor's visual state continuously.
     out.pinch = clamp(1 - pinchRatio / 0.6, 0, 1)
 
+    // ── Finger extension ─────────────────────────────────────────────────────
+    // Each fingertip's distance from the wrist, over palm scale. Everything
+    // below is derived from these, so the whole classifier is scale-invariant:
+    // the same gesture reads identically near the camera or far from it.
+    const extension = [
+      dist(indexTip, wrist) / scale,
+      dist(middleTip, wrist) / scale,
+      dist(ringTip, wrist) / scale,
+      dist(pinkyTip, wrist) / scale,
+    ]
+    const meanExtension = (extension[0]! + extension[1]! + extension[2]! + extension[3]!) / 4
+    const maxExtension = Math.max(extension[0]!, extension[1]!, extension[2]!, extension[3]!)
+
     // ── Grab ─────────────────────────────────────────────────────────────────
-    // Mean fingertip-to-wrist distance: a closed fist pulls every tip inward,
-    // which distinguishes it from a pinch (only thumb and index move).
-    const curl =
-      (dist(indexTip, wrist) +
-        dist(middleTip, wrist) +
-        dist(ringTip, wrist) +
-        dist(pinkyTip, wrist)) /
-      (4 * scale)
-    const grabRatio = this.grabFilter.filter(curl, timestamp)
+    // Gated on the furthest fingertip: a fist requires that EVERY finger is in,
+    // and one straight finger is enough to disqualify it. Using the mean here
+    // let a pointing hand drift into grab territory.
+    const grabRatio = this.grabFilter.filter(maxExtension, timestamp)
     const grabbing = this.grabGate.update(grabRatio)
-    out.grab = clamp(1 - grabRatio / 1.6, 0, 1)
+    // Reported as 0..1 closedness so a cursor can respond continuously, before
+    // the gate trips.
+    out.grab = clamp(1 - (grabRatio - 0.88) / 1.3, 0, 1)
 
     // ── Open palm ────────────────────────────────────────────────────────────
-    const openness = clamp(curl / 1.9, 0, 1)
+    // Normalised against a fully-splayed hand (~2.2 palm scales).
+    const openness = clamp(meanExtension / 2.2, 0, 1)
     const palmOpen = this.palmGate.update(openness)
     out.openness = openness
 
     // ── Point ────────────────────────────────────────────────────────────────
-    // Index extended while the other fingers are curled.
-    const indexExtended = dist(indexTip, wrist) / scale > 1.6
-    const othersCurled =
-      (dist(middleTip, wrist) + dist(ringTip, wrist) + dist(pinkyTip, wrist)) / (3 * scale) < 1.35
+    // Index extended while the other three are curled. Both halves are needed:
+    // an open palm also has an extended index, and a fist also has the other
+    // three curled.
+    const indexExtended = extension[0]! > 1.6
+    const othersCurled = (extension[1]! + extension[2]! + extension[3]!) / 3 < 1.35
     const pointing = indexExtended && othersCurled && !pinching
 
     // ── Resolve to one gesture ───────────────────────────────────────────────
@@ -216,6 +244,17 @@ export class HandRecognizer {
         speed: horizontal,
       })
       this.swipeCooldown = 0.55
+    }
+
+    // Mirror the raw landmarks for the debug overlay. Copied field-by-field
+    // rather than reassigned so the overlay's array reference stays valid.
+    for (let i = 0; i < 21 && i < landmarks.length; i++) {
+      const source = landmarks[i]
+      const target = out.landmarks[i]
+      if (!source || !target) continue
+      target.x = source.x
+      target.y = source.y
+      target.z = source.z
     }
 
     out.visible = true

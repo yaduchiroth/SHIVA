@@ -57,4 +57,12 @@ export interface HandState {
   velocity: Vec3
   /** Wall-clock seconds of the frame this state came from. */
   timestamp: number
+  /**
+   * The raw 21 landmarks, unfiltered, in normalised video space.
+   *
+   * Kept alongside the derived values purely so the debug overlay can draw the
+   * skeleton. Mutated in place like everything else on this object — never
+   * reassigned, or the overlay's reference goes stale.
+   */
+  landmarks: Vec3[]
 }

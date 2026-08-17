@@ -9,6 +9,7 @@ import { handFrame, resetHand, resetHandFrame } from '@/core/hands/handFrame'
 import { emit } from '@/core/events/bus'
 import { canUseCamera } from '@/lib/device'
 import { HandRecognizer } from './gestureRecognizer'
+import { setTrackingVideo } from './videoSource'
 
 /**
  * The hand-tracking loop.
@@ -62,6 +63,7 @@ export function useHandTracking() {
       video.current.remove()
       video.current = null
     }
+    setTrackingVideo(null)
     landmarker.current?.close()
     landmarker.current = null
     resetHandFrame()
@@ -152,6 +154,8 @@ export function useHandTracking() {
     el.muted = true
     el.playsInline = true
     video.current = el
+    // Published so the tracking inspector can draw the feed it's analysing.
+    setTrackingVideo(el)
 
     await new Promise<void>((resolve) => {
       el.onloadeddata = () => resolve()

@@ -128,6 +128,17 @@ export function isCaptureEnabled(): boolean {
   return new URLSearchParams(window.location.search).get('capture') === '1'
 }
 
+/**
+ * Whether the live tracking inspector should be shown (`?debug=hands`).
+ *
+ * Off by default: it draws the camera feed every frame, which is a real cost,
+ * and a permanent picture-in-picture of your own hand is not the interface.
+ */
+export function isHandDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('debug') === 'hands'
+}
+
 /** Secure context is a hard requirement for getUserMedia outside localhost. */
 export function canUseCamera(): boolean {
   if (typeof window === 'undefined') return false

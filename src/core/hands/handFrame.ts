@@ -29,6 +29,7 @@ const emptyHand = (handedness: Handedness): HandState => ({
   gesture: 'idle',
   velocity: emptyVec(),
   timestamp: 0,
+  landmarks: Array.from({ length: 21 }, emptyVec),
 })
 
 export interface HandFrame {
