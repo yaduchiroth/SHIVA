@@ -61,11 +61,19 @@ report the camera as unavailable.
 
 |         | Hand                           | Pointer              |
 | ------- | ------------------------------ | -------------------- |
-| Rotate  | Swipe                          | Drag, scroll, or ← → |
+| Rotate  | Swipe, or turn with both hands | Drag, scroll, or ← → |
 | Grab    | Pinch                          | Press and hold       |
 | Expand  | Fist                           | Click, Enter         |
 | Dismiss | Open palm                      | Escape               |
+| Zoom    | Pinch both hands, spread apart | `R` to reset         |
 | Wake    | Trace a circle with one finger | `/` to type          |
+
+**One hand grabs an object; two hands grab the world.** Pinch with both hands
+and the space itself responds — move them together to turn the ring
+continuously (not in one-panel steps, so you can leave it halfway between two
+panels to compare them), spread them apart or bring them together to pull the
+camera in and out. Single-hand pinch still picks up a panel, unchanged. `R`
+returns the camera to neutral.
 
 Both voice modes call the same tools and read the same live panels, so a spoken
 question and a typed one cannot answer with different facts.
@@ -142,6 +150,16 @@ the detected skeleton and the live pinch / grab / openness values. When a
 gesture doesn't fire, this distinguishes the four possible causes — no camera
 frames, no hand detected, wrong classification, or nothing listening — in about
 two seconds.
+
+### Credits
+
+The two-handed gesture design — pinch count selecting the mode, and resetting
+the reference point on every mode change so re-grabbing never jumps — is adapted
+from [Sagar Tamang's ULTRON orb UI](https://sagartamang.com/projects/ultron)
+(MIT), as is the CPU-delegate fallback for GPUs that refuse MediaPipe's GPU
+path. Its pinch thresholds are 0.32 / 0.45, which is exactly what SHIVA's own
+calibration had arrived at independently — the most reassuring thing that could
+be said about either.
 
 ## Commands
 

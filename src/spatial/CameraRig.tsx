@@ -33,6 +33,7 @@ export function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
   const pointer = useThree((s) => s.pointer)
   const focused = useSpatialStore((s) => s.focused)
   const idle = useSpatialStore((s) => s.idle)
+  const dolly = useSpatialStore((s) => s.dolly)
   const inputMode = useGestureStore((s) => s.inputMode)
 
   const target = useRef(new THREE.Vector3().copy(BASE))
@@ -46,6 +47,10 @@ export function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
 
     const base = focused !== null ? FOCUSED : BASE
     target.current.copy(base)
+    // The two-handed spread scales distance rather than replacing it, so the
+    // rig's own framing decisions still apply underneath — pull in on focus,
+    // drift when idle — and the user is adjusting them rather than overriding.
+    target.current.z *= dolly
 
     if (!reducedMotion) {
       // Idle breathing — a slow vertical drift that keeps the frame alive.

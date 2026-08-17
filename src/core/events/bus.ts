@@ -25,6 +25,16 @@ export interface EventMap {
   'panel:focus': { index: number }
   'panel:blur': { index: number }
   'carousel:step': { direction: -1 | 1 }
+  /**
+   * Both hands pinched: the user has hold of the space itself rather than an
+   * object in it. One hand grabs a panel; two hands grab the world.
+   */
+  'world:grab': Record<string, never>
+  'world:release': Record<string, never>
+  /** Continuous carousel rotation, in panels. */
+  'world:spin': { delta: number }
+  /** Camera dolly, as a multiplier on distance. Below 1 moves closer. */
+  'world:zoom': { factor: number }
   /** Any UI affordance that wants a confirmation blip. */
   'ui:confirm': { intensity: number }
   'tracking:acquired': { hands: number }

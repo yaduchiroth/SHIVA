@@ -9,6 +9,7 @@ import { handFrame, resetHand, resetHandFrame } from '@/core/hands/handFrame'
 import { emit } from '@/core/events/bus'
 import { canUseCamera } from '@/lib/device'
 import { HandRecognizer } from './gestureRecognizer'
+import { BimanualRecognizer } from './bimanual'
 import { setTrackingVideo } from './videoSource'
 
 /**
@@ -43,6 +44,9 @@ export function useHandTracking() {
     left: new HandRecognizer('left'),
     right: new HandRecognizer('right'),
   })
+  // Reads both hands at once, so it is stepped after the per-hand recognizers
+  // rather than alongside them.
+  const bimanual = useRef(new BimanualRecognizer())
 
   // MediaPipe requires strictly increasing timestamps and throws if one repeats
   // — which happens whenever a frame is sampled twice.
@@ -69,6 +73,7 @@ export function useHandTracking() {
       video.current = null
     }
     setTrackingVideo(null)
+    bimanual.current.reset()
     landmarker.current?.close()
     landmarker.current = null
     resetHandFrame()
@@ -128,19 +133,33 @@ export function useHandTracking() {
       // Both paths are same-origin, vendored by scripts/fetch-assets.mjs — the
       // COEP header this app sets would block a CDN fetch.
       const fileset = await FilesetResolver.forVisionTasks('/mediapipe')
-      landmarker.current = await Landmarker.createFromOptions(fileset, {
+      const options = {
         baseOptions: {
           modelAssetPath: '/models/hand_landmarker.task',
-          delegate: 'GPU',
+          delegate: 'GPU' as const,
         },
-        runningMode: 'VIDEO',
+        runningMode: 'VIDEO' as const,
         numHands: 2,
         minHandDetectionConfidence: 0.5,
         minHandPresenceConfidence: 0.5,
         // Higher than detection: once a hand is found, keeping the track stable
         // matters more than re-acquiring it aggressively.
         minTrackingConfidence: 0.6,
-      })
+      }
+
+      try {
+        landmarker.current = await Landmarker.createFromOptions(fileset, options)
+      } catch {
+        // Some drivers and browsers refuse the GPU delegate outright — older
+        // Intel integrated graphics and Firefox's WebGPU builds among them.
+        // Treating that as "hand tracking unavailable" throws away a machine
+        // that can track perfectly well, just on the CPU. It costs frames, and
+        // the quality tier's inference ceiling already accounts for that.
+        landmarker.current = await Landmarker.createFromOptions(fileset, {
+          ...options,
+          baseOptions: { ...options.baseOptions, delegate: 'CPU' as const },
+        })
+      }
     } catch (err) {
       mediaStream.getTracks().forEach((t) => t.stop())
       stream.current = null
@@ -232,6 +251,10 @@ export function useHandTracking() {
         resetHand('right')
         recognizers.current.right.reset()
       }
+
+      // Stepped once both hands are current, so it never reads one hand from
+      // this frame against the other from the last.
+      bimanual.current.update()
 
       const count = (seen.left ? 1 : 0) + (seen.right ? 1 : 0)
       handFrame.count = count

@@ -24,6 +24,8 @@ export function useInteractionDriver() {
   // decelerate, so sampling then would under-read every throw.
   const heldVelocity = useRef({ x: 0, y: 0, z: 0 })
   const velocitySampler = useRef<number | null>(null)
+  /** True while both hands hold the world; single-hand pinches are ignored. */
+  const worldHeld = useRef(false)
 
   useEffect(() => {
     const offSwipe = on('gesture:swipe', ({ direction }) => {
@@ -36,9 +38,41 @@ export function useInteractionDriver() {
       emit('carousel:step', { direction })
     })
 
+    // Two hands take precedence over one. While the world is held, a single
+    // pinch must not also grab a panel — both hands ARE pinched, so without
+    // this every two-handed gesture would drag a panel along with it.
+    const offWorldGrab = on('world:grab', () => {
+      setIdle(false)
+      worldHeld.current = true
+      const state = useSpatialStore.getState()
+      if (state.grabbed !== null) {
+        // A panel picked up a frame earlier, before the second hand closed.
+        // Released with no velocity so it settles back rather than being
+        // thrown by a gesture the user never meant as a throw.
+        emit('panel:release', { index: state.grabbed, velocity: { x: 0, y: 0, z: 0 } })
+      }
+    })
+
+    const offWorldRelease = on('world:release', () => {
+      worldHeld.current = false
+    })
+
+    const offSpin = on('world:spin', ({ delta }) => {
+      const state = useSpatialStore.getState()
+      // Continuous, not stepped: the ring tracks your hands 1:1 and can be left
+      // between two panels. This is what the swipe could never express.
+      state.setIndex(state.index + delta)
+    })
+
+    const offZoom = on('world:zoom', ({ factor }) => {
+      useSpatialStore.getState().adjustDolly(factor)
+    })
+
     const offStart = on('gesture:start', ({ gesture }) => {
       setIdle(false)
       const state = useSpatialStore.getState()
+
+      if (worldHeld.current) return
 
       if (gesture === 'pinch') {
         // Pinch on the front panel grabs it. Pinching while one is already held
@@ -91,6 +125,10 @@ export function useInteractionDriver() {
 
     return () => {
       offSwipe()
+      offWorldGrab()
+      offWorldRelease()
+      offSpin()
+      offZoom()
       offStart()
       offEnd()
       if (velocitySampler.current !== null) {
@@ -295,6 +333,14 @@ export function usePointerFallback(enabled: boolean) {
           break
         case 'Escape':
           focus(null)
+          break
+        case 'r':
+        case 'R':
+          // Undoes the two-handed zoom. Worth a key of its own: the gesture is
+          // relative, so there is no way to get precisely back to neutral by
+          // repeating it, and an interface you can zoom into but not out of
+          // cleanly is one people stop zooming.
+          state.resetDolly()
           break
         default:
           return
