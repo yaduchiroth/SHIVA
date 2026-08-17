@@ -10,7 +10,7 @@ stage — and the seam that lets a brain drive it. That seam is a typed event bu
 with eleven events. If your AI can call `emit('carousel:step', {direction: 1})`,
 it can drive this interface, and it does not need to know anything else about it.
 
-Total: **9,553 lines** across 71 files (excluding config). Of that, ~1,965 lines
+Total: **10,706 lines** across 78 files (excluding config). Of that, ~1,965 lines
 are the portable input layer — filters, tracking, gesture engine, interaction
 policy — and another ~2,330 are the 3D stage if you want the look too. The rest
 is SHIVA's own brain, data sources and chrome.
@@ -79,6 +79,7 @@ than rewriting:
 | `src/lib/one-euro.ts` | 115   | One Euro adaptive filter (Casiez et al., CHI 2012)              |
 | `src/lib/math.ts`     | 73    | `clamp`, `damp` (framerate-independent), `dampAngle`, `Schmitt` |
 | `src/lib/sse.ts`      | 68    | SSE framer that handles CRLF and the final frame                |
+| `src/lib/pcm.ts`      | 76    | Float32↔int16 PCM and resampling for streamed voice            |
 | `src/core/types.ts`   | 77    | `HandState`, `Vec3`, `GestureName`, `TrackingStatus`            |
 
 No imports outside themselves. `one-euro.ts` and `math.ts` are the whole reason
@@ -627,30 +628,66 @@ the client bundle to every visitor.
 
 ## 9. Voice
 
-`src/brain/speech.ts` (236) · `src/brain/useVoice.ts` (169) · `app/api/speech/route.ts` (91)
+There are two voice paths, and they are different things rather than one being a
+worse version of the other.
 
-Two-path synthesis with fallback:
+### Live agent — `src/brain/useVoiceAgent.ts` (445) + `src/adapters/voice/deepgram.ts` (214)
 
-- **`speakNeural()`** — POSTs to `/api/speech`, gets base64 PCM back, decodes
-  base64 → `Int16Array` → `Float32Array` (dividing by 32768), plays via WebAudio.
-  Sample rate is **parsed from the mime type** (`audio/L16;codec=pcm;rate=24000`)
-  rather than assumed, so a model that changes rate doesn't silently play at the
-  wrong pitch.
-- **`speak()`** — browser `speechSynthesis` fallback, with macOS voice preference
-  ordering: siri > premium/enhanced > natural/neural > named. Starts instantly but
-  is unmistakably synthetic.
-- **`say()`** — tries neural, falls back.
+One websocket. Microphone audio streams up continuously, agent audio streams
+down, and the agent decides when to talk. The property that matters is
+**interruption**: the moment the service reports `UserStartedSpeaking`, every
+scheduled output buffer is stopped mid-word. Turn-based voice structurally
+cannot do this — by the time you hear a reply it has already been synthesised in
+full.
 
-`extractWakeCommand()` accepts `shiva | shivah | sheva | siva | shever` because
-Web Speech transcribes the name inconsistently.
+Worth lifting if you want live voice anywhere:
 
-**Status:** the user's verdict was _"the voice is not humanlike discussion"_, which
-is accurate — this is turn-based TTS, not conversational. A Deepgram Voice Agent
-integration is the intended replacement (see `scripts/probe-deepgram.mjs`, which
-discovers the real API shape rather than coding from memory). **Not yet built.**
-If your existing AI already has good voice, keep yours.
+- `src/lib/pcm.ts` — `floatToInt16` / `int16ToFloat` / `resample`. Pure and
+  tested. Every bug here produces _audio_ rather than an error, which is why it
+  is isolated: a sign flip is noise, a scale error is a click, a missed resample
+  is speech at half speed that transcribes as gibberish.
+- The **inline AudioWorklet** (a Blob URL, so it loads under COEP where a CDN
+  worklet would not) that batches 128-frame quanta into chunks — posting every
+  quantum is ~375 `postMessage` calls a second.
+- The **playback cursor** pattern: schedule each buffer at
+  `max(cursor, currentTime + lead)` and keep every source in a Set so barge-in
+  can stop them all.
+- `describeClose()` — a websocket rejected on a bad field closes with `1008` and
+  a reason string that _names the field_. Logging only `event.code` throws away
+  the single most useful diagnostic the service produces.
 
----
+**Credential handling is the part not to improvise.** A browser cannot set
+headers on a WebSocket, so the credential travels in the subprotocol, where any
+script on the page can read it. `app/api/voice/token/route.ts` holds the real
+key server-side and mints 30-second tokens. **It never falls back to the real
+key when the grant fails** — that fallback is the tempting one-line fix during
+development and it publishes the account.
+
+**Status: written, not verified.** The build container's egress policy denies
+`api.deepgram.com` and `agent.deepgram.com` at the gateway, so the protocol
+constants come from documentation rather than observed behaviour. Everything the
+service could disagree with is a named constant in `deepgram.ts`, and
+`scripts/probe-deepgram.mjs` prints what it actually accepts — correcting it is
+editing literals, not rewriting the client.
+
+### Wake word — `src/brain/speech.ts` (236) + `useVoice.ts` (169) + `app/api/speech/route.ts` (91)
+
+The older path: browser recognition listens for "SHIVA…", one utterance goes to
+Gemini, one reply comes back. Kept because it needs no Deepgram key and costs
+nothing while idle.
+
+- `speakNeural()` decodes base64 PCM → `Int16Array` → `Float32Array` (÷32768)
+  and plays via WebAudio. Sample rate is **parsed from the mime type**
+  (`audio/L16;codec=pcm;rate=24000`), not assumed — a model that changes rate
+  would otherwise play at the wrong pitch and sound like a different voice
+  rather than like a bug.
+- `speak()` falls back to `speechSynthesis` with macOS voice ordering:
+  siri > premium/enhanced > natural/neural > named.
+- `extractWakeCommand()` accepts `shiva | shivah | sheva | siva | shever`,
+  because Web Speech transcribes the name inconsistently.
+- Continuous recognition **ends itself on silence** and must be restarted from
+  `onend` — with a backoff and a failure cap, or a revoked mic permission
+  becomes an infinite restart loop that pins a core.
 
 ## 10. Live data
 
@@ -874,6 +911,8 @@ app/
   globals.css                           154   Tailwind v4 @theme tokens, palette
   api/brain/route.ts                    103   edge; streams the brain (server-only key)
   api/speech/route.ts                    91   edge; Gemini TTS → base64 PCM
+  api/voice/token/route.ts               96   edge; mints 30s Deepgram tokens —
+                                              never falls back to the real key
   api/data/weather/route.ts             122   Open-Meteo proxy (keyless)
   api/data/projects/route.ts            149   GitHub public API proxy
 
@@ -884,6 +923,7 @@ src/
     one-euro.ts                         115  ★ adaptive filter — TAKE THIS
     math.ts                              73  ★ damp, dampAngle, Schmitt — TAKE THIS
     sse.ts                               68  ★ CRLF-safe SSE framer
+    pcm.ts                               76  ★ float32↔int16 + resample (tested)
     device.ts                           146   GPU probe, tier selection, URL flags
 
   core/
@@ -924,7 +964,10 @@ src/
     brain/HolographicText.tsx           288   streamed-token 3D text
 
   brain/
-    useBrain.ts                         272   turn loop, executeTool dispatcher
+    useBrain.ts                         212   turn loop, streaming, tool round-trip
+    executeTool.ts                       78  ★ the one tool dispatcher, shared by
+                                             both brains so they cannot diverge
+    useVoiceAgent.ts                    445  ★★ live voice socket, barge-in, worklet
     useVoice.ts                         169   Web Speech recognition + wake word
     speech.ts                           236   neural + browser TTS, say()
 
@@ -932,6 +975,8 @@ src/
     brain/types.ts                       90  ★ the Brain contract — implement this
     brain/gemini.ts                     339   Gemini SSE adapter w/ fallbacks
     brain/commands.ts                   143  ★ tool schemas + anti-fabrication prompt
+    voice/deepgram.ts                   214  ★ Voice Agent protocol; every value the
+                                             service could reject is a constant here
     data/types.ts                        57  ★ DataResult union — steal this idea
     data/sources.ts                      71
 
@@ -952,6 +997,8 @@ tests/
   calibrate.spec.ts                      41  ★ prints measured ratios — RETUNE WITH THIS
   gestures.spec.ts                      195
   sse.spec.ts                           117
+  pcm.spec.ts                           101   PCM conversion + resampling
+  voice.spec.ts                          89   handshake invariants, close messages
   brain.spec.ts                         172
   render.spec.ts                        139
   performance.spec.ts                    98
@@ -960,7 +1007,7 @@ tests/
 
 scripts/
   fetch-assets.mjs                       89  ★ vendors WASM + model
-  probe-deepgram.mjs                    231   API discovery (unrun)
+  probe-deepgram.mjs                    241   API discovery — run this first
 ```
 
 ★ = worth taking · ★★ = take · ★★★ = the reason this document exists

@@ -67,11 +67,23 @@ report the camera as unavailable.
 | Dismiss | Open palm                      | Escape               |
 | Wake    | Trace a circle with one finger | `/` to type          |
 
+Both voice modes call the same tools and read the same live panels, so a spoken
+question and a typed one cannot answer with different facts.
+
 ### Talking to SHIVA
 
-Three ways in, all equal:
+Four ways in, all equal:
 
-- **Voice** — press **Voice**, then say "SHIVA, show me the markets". The wake
+- **Live** — press **Live** and just talk. One websocket carries your microphone
+  up and the agent's voice down, so it hears you _while it is speaking_: you can
+  cut it off mid-sentence and it stops, the way a person does. Needs
+  `DEEPGRAM_API_KEY`; the button is disabled and says so without one.
+
+  This is a different thing from the wake-word path rather than a better
+  version of it. Turn-based voice cannot be interrupted, because by the time you
+  hear a reply it has already been synthesised in full.
+
+- **Wake** — press **Wake**, then say "SHIVA, show me the markets". The wake
   phrase is required so the microphone can stay on without every remark in the
   room becoming a prompt. Chromium-based browsers only; Firefox has no
   `SpeechRecognition`.

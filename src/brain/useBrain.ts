@@ -5,11 +5,10 @@ import type { BrainEvent } from '@/adapters/brain/types'
 import { useBrainStore } from '@/core/store/useBrainStore'
 import { useSpatialStore, activeModuleIndex } from '@/core/store/useSpatialStore'
 import { useSystemStore } from '@/core/store/useSystemStore'
-import { MODULES, getModule } from '@/core/config/modules'
+import { getModule } from '@/core/config/modules'
 import { emit } from '@/core/events/bus'
 import { SseFramer, sseData } from '@/lib/sse'
-import { readPanel } from '@/spatial/carousel/panelContent'
-import type { ModuleId, QualityTierName } from '@/core/types'
+import { executeTool } from './executeTool'
 
 /**
  * The brain client: sends a turn, streams the reply, executes tool calls.
@@ -19,65 +18,6 @@ import type { ModuleId, QualityTierName } from '@/core/types'
  * in identical code, which is the only way to stop the two input paths drifting
  * apart as the interface grows.
  */
-
-/** Maps a tool call to interface actions. Returns what happened, for the log. */
-function executeTool(name: string, args: Record<string, unknown>): string {
-  const spatial = useSpatialStore.getState()
-
-  switch (name) {
-    case 'focus_module': {
-      const moduleId = args.module as ModuleId
-      const index = MODULES.findIndex((m) => m.id === moduleId)
-      if (index < 0) return `unknown module: ${moduleId}`
-
-      // The carousel index is unbounded and wraps, so stepping to a specific
-      // panel means finding the shortest path from wherever it currently is —
-      // not assigning an absolute index, which could spin it the long way round.
-      const current = spatial.index
-      const currentSlot = activeModuleIndex(current)
-      let delta = index - currentSlot
-      const count = MODULES.length
-      if (delta > count / 2) delta -= count
-      if (delta < -count / 2) delta += count
-
-      spatial.setIndex(current + delta)
-      spatial.focus(index)
-      return `focused ${moduleId}`
-    }
-
-    case 'rotate_carousel': {
-      const direction = args.direction === 'left' ? -1 : 1
-      emit('carousel:step', { direction })
-      return `rotated ${args.direction}`
-    }
-
-    case 'dismiss': {
-      spatial.focus(null)
-      return 'dismissed'
-    }
-
-    case 'read_module': {
-      // Returns the same readout the panel renders, so what SHIVA says and what
-      // you can see on the panel are the same numbers by construction.
-      const readout = readPanel(args.module as ModuleId)
-      if (readout.status !== 'live') {
-        return `${args.module}: no live data (${readout.note})`
-      }
-      const rows = readout.rows.map((r) => `${r.label}: ${r.value}`).join('; ')
-      return `${args.module}: ${readout.headline} — ${readout.caption}. ${rows}`
-    }
-
-    case 'set_quality': {
-      const tier = args.tier as QualityTierName
-      if (tier !== 'low' && tier !== 'medium' && tier !== 'high') return `unknown tier: ${tier}`
-      useSystemStore.getState().setTier(tier)
-      return `quality set to ${tier}`
-    }
-
-    default:
-      return `unknown tool: ${name}`
-  }
-}
 
 export function useBrain() {
   const setPhase = useBrainStore((s) => s.setPhase)

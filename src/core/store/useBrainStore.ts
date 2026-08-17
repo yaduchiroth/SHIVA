@@ -10,6 +10,16 @@ export type BrainPhase =
   | 'speaking' // streaming a response
   | 'error'
 
+/**
+ * The live voice socket's own lifecycle.
+ *
+ * Kept separate from `phase` on purpose: phase describes the CONVERSATION
+ * (listening, thinking, speaking) and applies equally to typed turns, while this
+ * describes the CONNECTION. Collapsing them means a socket that dies mid-reply
+ * has nowhere to say so — the UI would still read "speaking".
+ */
+export type AgentStatus = 'off' | 'connecting' | 'live' | 'error'
+
 interface BrainState {
   phase: BrainPhase
   /** Whether the server has an API key. Null until probed. */
@@ -22,16 +32,28 @@ interface BrainState {
   transcript: string
   /** Whether the wake word is armed and the mic is running. */
   wakeArmed: boolean
+  /** State of the live voice-agent socket, independent of `phase`. */
+  agentStatus: AgentStatus
   error: string | null
 
   setPhase: (phase: BrainPhase) => void
   setConfigured: (configured: boolean) => void
   setTranscript: (transcript: string) => void
   setWakeArmed: (armed: boolean) => void
+  setAgentStatus: (status: AgentStatus) => void
   appendDelta: (delta: string) => void
   /** Commits the streamed response into history and clears the buffer. */
   commitResponse: () => void
   pushUser: (content: string) => void
+  /**
+   * Commits a complete assistant turn.
+   *
+   * The voice agent delivers finished utterances rather than token deltas, so it
+   * has nothing to accumulate — `appendDelta` + `commitResponse` would mean
+   * writing the whole string into the streaming buffer only to immediately move
+   * it out again, and would fight with a typed turn streaming at the same time.
+   */
+  pushAssistant: (content: string) => void
   /** Records a tool result so the next turn can answer from it. */
   pushToolResult: (toolName: string, content: string, thoughtSignature?: string) => void
   setError: (error: string | null) => void
@@ -48,12 +70,14 @@ export const useBrainStore = create<BrainState>((set) => ({
   streaming: '',
   transcript: '',
   wakeArmed: false,
+  agentStatus: 'off',
   error: null,
 
   setPhase: (phase) => set({ phase }),
   setConfigured: (configured) => set({ configured }),
   setTranscript: (transcript) => set({ transcript }),
   setWakeArmed: (wakeArmed) => set({ wakeArmed }),
+  setAgentStatus: (agentStatus) => set({ agentStatus }),
 
   // Token-rate writes. Acceptable here and nowhere else: the response text is
   // genuinely what the UI must re-render, and tokens arrive at reading speed —
@@ -78,6 +102,13 @@ export const useBrainStore = create<BrainState>((set) => ({
       transcript: '',
     })),
 
+  pushAssistant: (content) =>
+    set((s) => ({
+      messages: [...s.messages, { role: 'assistant' as const, content, at: Date.now() }].slice(
+        -MAX_HISTORY,
+      ),
+    })),
+
   pushToolResult: (toolName, content, thoughtSignature) =>
     set((s) => ({
       messages: [
@@ -87,5 +118,13 @@ export const useBrainStore = create<BrainState>((set) => ({
     })),
 
   setError: (error) => set({ error, phase: error ? 'error' : 'idle' }),
-  reset: () => set({ messages: [], streaming: '', transcript: '', error: null, phase: 'idle' }),
+  reset: () =>
+    set({
+      messages: [],
+      streaming: '',
+      transcript: '',
+      error: null,
+      phase: 'idle',
+      agentStatus: 'off',
+    }),
 }))

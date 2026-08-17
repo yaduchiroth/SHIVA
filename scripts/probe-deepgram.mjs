@@ -116,10 +116,7 @@ if (typeof WebSocket === 'undefined') {
   process.exit(0)
 }
 
-const ENDPOINTS = [
-  'wss://agent.deepgram.com/v1/agent/converse',
-  'wss://agent.deepgram.com/agent',
-]
+const ENDPOINTS = ['wss://agent.deepgram.com/v1/agent/converse', 'wss://agent.deepgram.com/agent']
 
 /** Candidate Settings payloads, newest documented shape first. */
 const SETTINGS = [
@@ -159,6 +156,17 @@ const SETTINGS = [
   },
 ]
 
+/**
+ * Did the server actually accept us?
+ *
+ * Only a greeting counts. An earlier version treated "any events at all" as
+ * success on the timeout path, and duly reported ACCEPTED for a socket that had
+ * done nothing but fail to connect twice — a probe that lies is worse than no
+ * probe, since the whole point is to stop the integration being written against
+ * assumptions.
+ */
+const accepted = (events) => events.some((e) => /Welcome|SettingsApplied/i.test(e))
+
 /** Opens a socket, sends one Settings variant, records what comes back. */
 function probe(url, variant) {
   return new Promise((resolve) => {
@@ -183,7 +191,7 @@ function probe(url, variant) {
       resolve({ ok, events })
     }
 
-    const timer = setTimeout(() => done(events.length > 0), 9000)
+    const timer = setTimeout(() => done(accepted(events)), 9000)
 
     socket.onopen = () => {
       events.push('open')
@@ -205,7 +213,7 @@ function probe(url, variant) {
     socket.onclose = (event) => {
       events.push(`close ${event.code}${event.reason ? ` — ${safe(event.reason, 160)}` : ''}`)
       clearTimeout(timer)
-      done(events.some((e) => /Welcome|SettingsApplied/i.test(e)))
+      done(accepted(events))
     }
   })
 }
