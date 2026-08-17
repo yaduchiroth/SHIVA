@@ -16,10 +16,11 @@
  *
  * Run:  BUILD_STANDALONE=1 npm run build && npm run pack
  */
-import { cp, rm } from 'node:fs/promises'
+import { cp, readFile, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { exists, human as mb, weigh } from './lib/fsutil.mjs'
+import { inspectEnv, isUntouchedTemplate } from './lib/env-inspect.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, '.next', 'standalone')
@@ -70,10 +71,33 @@ for (const [from, to, label] of [
 // Copying it is a convenience, not the recommendation: real environment
 // variables set by the host are better, because they keep secrets off the disk
 // and out of any backup of the deploy directory. Both are verified to work.
+//
+// And it reports what is IN the file, not merely that it exists. Announcing
+// "copied" for a file full of blank values is the same failure this project has
+// already shipped twice: a check on presence, reported as a check on substance.
+// Here it would cost an entire deploy cycle — build, 27 MB upload, configure the
+// host, restart — to arrive at a status page saying no key was found.
 const envSource = join(ROOT, '.env.local')
 if (await exists(envSource)) {
   await cp(envSource, join(OUT, '.env.local'))
-  line('  .env.local       copied (the standalone server reads it from its own directory)')
+
+  const text = await readFile(envSource, 'utf8')
+  const { values } = inspectEnv(text)
+  const example = await readFile(join(ROOT, '.env.example'), 'utf8').catch(() => undefined)
+  const gemini = values.get('GEMINI_API_KEY')
+
+  if (isUntouchedTemplate(values, text, example) || !gemini) {
+    // A warning rather than a failure: deploying without a brain is a legitimate
+    // choice — the spatial interface, hand tracking and live weather all work —
+    // and the app says so honestly rather than pretending to think.
+    line('  .env.local       copied, but GEMINI_API_KEY IS BLANK')
+    line('                   The deploy will report "no key" and the brain will not')
+    line('                   start. Run `npm run doctor` before uploading.')
+  } else {
+    const extras = ['DEEPGRAM_API_KEY', 'GITHUB_TOKEN'].filter((k) => values.get(k))
+    const also = extras.length > 0 ? `, plus ${extras.join(' and ')}` : ''
+    line(`  .env.local       copied with GEMINI_API_KEY set${also}`)
+  }
 } else {
   line('  .env.local       absent — set credentials as environment variables instead')
 }
