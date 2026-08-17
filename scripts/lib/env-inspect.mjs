@@ -39,6 +39,9 @@ export function inspectEnv(text) {
   const findings = []
   const values = new Map()
   const seenAt = new Map()
+  // Line numbers are surfaced so a message can say "line 14 is blank" rather
+  // than "the key is missing" — a distinction that changes what you do about it.
+  const lineOf = new Map()
 
   // A UTF-8 BOM is invisible everywhere and makes the FIRST key unreadable,
   // because its name silently begins with a zero-width character.
@@ -131,8 +134,57 @@ export function inspectEnv(text) {
       })
     }
     seenAt.set(key, number)
+    lineOf.set(key, number)
     values.set(key, value)
   })
 
-  return { findings, values }
+  return { findings, values, lineOf }
+}
+
+/**
+ * Credentials the app can actually use. Order matters: the first one is what a
+ * "set one to get started" message should name.
+ */
+const CREDENTIALS = [
+  'GEMINI_API_KEY',
+  'DEEPGRAM_API_KEY',
+  'GITHUB_TOKEN',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+]
+
+/**
+ * Has this file been copied from the template and then left alone?
+ *
+ * Worth its own detection rather than falling through to "no key found",
+ * because it is a completely ordinary thing to do — `cp .env.example .env.local`
+ * is the documented first step — and it has a one-line fix. Reporting it as a
+ * missing key instead sends someone looking for a fault, when nothing is
+ * faulty and they simply have one step left.
+ *
+ * The `example` argument is optional: a byte-identical copy is the clearest
+ * signal, but a file where every credential line exists and is blank is the
+ * same situation even after someone has reflowed or trimmed the comments.
+ *
+ * Deliberately returns false once ANY credential has a value. Someone who has
+ * filled in one key and not another is mid-setup, not un-started, and telling
+ * them they never began would be both wrong and annoying.
+ */
+export function isUntouchedTemplate(values, text, example) {
+  const present = CREDENTIALS.filter((key) => values.has(key))
+  if (present.length === 0) return false
+  if (present.some((key) => values.get(key))) return false
+
+  if (typeof example === 'string' && text.trim() === example.trim()) return true
+
+  // Every credential the file mentions is blank, and it mentions several — a
+  // hand-written file with one blank key is not a template.
+  return present.length >= 2
+}
+
+/** The command that fills in a key without opening an editor. */
+export function fillCommand(key, platform = process.platform) {
+  // BSD sed (macOS) requires an argument to -i; GNU sed refuses one.
+  const inPlace = platform === 'darwin' ? "-i ''" : '-i'
+  return `sed ${inPlace} 's|^${key}=$|${key}=your_key_here|' .env.local`
 }

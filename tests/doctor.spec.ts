@@ -2,7 +2,12 @@ import { expect, test } from '@playwright/test'
 // A plain .mjs helper, deliberately not TypeScript: it is imported by
 // `scripts/doctor.mjs`, which must run under bare `node` with no build step —
 // on a machine where the install may itself be what's broken.
-import { IMPOSTORS, inspectEnv } from '../scripts/lib/env-inspect.mjs'
+import {
+  IMPOSTORS,
+  fillCommand,
+  inspectEnv,
+  isUntouchedTemplate,
+} from '../scripts/lib/env-inspect.mjs'
 
 /**
  * The env-file inspector behind `npm run doctor`.
@@ -23,7 +28,20 @@ interface Finding {
 interface Result {
   findings: Finding[]
   values: Map<string, string>
+  lineOf: Map<string, number>
 }
+
+/** The shape `cp .env.example .env.local` leaves behind. */
+const TEMPLATE = [
+  '# SHIVA environment',
+  'GEMINI_API_KEY=',
+  'GEMINI_MODEL=gemini-flash-latest',
+  'DEEPGRAM_API_KEY=',
+  'GITHUB_TOKEN=',
+].join('\n')
+
+const untouched = (text: string, example?: string): boolean =>
+  isUntouchedTemplate(inspect(text).values, text, example) as boolean
 
 const inspect = (text: string): Result => inspectEnv(text) as Result
 const messages = (r: Result) => r.findings.map((f) => f.message).join('\n')
@@ -143,5 +161,80 @@ test.describe('impostor filenames', () => {
     expect(IMPOSTORS).toContain('.env.local.txt')
     expect(IMPOSTORS).toContain('.env.local.rtf')
     expect(IMPOSTORS).toContain('env.local')
+  })
+})
+
+test.describe('line numbers', () => {
+  test('are reported so a message can cite the blank line', () => {
+    // "The key is missing" and "line 14 is blank" call for different actions,
+    // and the file is 3.6 KB of commentary — being told to add a key that is
+    // already sitting there as a blank line is a genuinely annoying dead end.
+    const result = inspect('# note\nGEMINI_MODEL=x\nGEMINI_API_KEY=\n')
+    expect(result.lineOf.get('GEMINI_API_KEY')).toBe(3)
+  })
+})
+
+test.describe('an untouched template', () => {
+  test('is recognised for what it is', () => {
+    // The exact state a fresh setup lands in: `cp .env.example .env.local` and
+    // nothing else. Nothing is broken — there is simply one step left — and
+    // calling that "no key anywhere" sends someone hunting for a fault.
+    expect(untouched(TEMPLATE, TEMPLATE)).toBe(true)
+  })
+
+  test('is recognised without the template to compare against', () => {
+    // Someone may have trimmed the comments. Every credential line present and
+    // blank is the same situation.
+    expect(untouched(TEMPLATE)).toBe(true)
+  })
+
+  test('stops being reported the moment one key is filled in', () => {
+    // The property that matters most. Someone mid-setup has begun, and telling
+    // them they have not is both wrong and irritating.
+    expect(untouched(TEMPLATE.replace('GEMINI_API_KEY=', 'GEMINI_API_KEY=real'))).toBe(false)
+  })
+
+  test('a filled-in key other than the first still counts as started', () => {
+    expect(untouched(TEMPLATE.replace('GITHUB_TOKEN=', 'GITHUB_TOKEN=ghp_x'))).toBe(false)
+  })
+
+  test('an empty file is not a template', () => {
+    // Nothing was copied. That is the plain "no key" case, and it has different
+    // advice — add a line, rather than fill one in.
+    expect(untouched('')).toBe(false)
+    expect(untouched('# just a comment\n')).toBe(false)
+  })
+
+  test('a hand-written file with a single blank key is not a template', () => {
+    // One blank credential is someone editing, not an unmodified copy.
+    expect(untouched('GEMINI_API_KEY=\nGEMINI_MODEL=x\n')).toBe(false)
+  })
+
+  test('a file with only non-credential settings is not a template', () => {
+    expect(untouched('GEMINI_MODEL=gemini-flash-latest\n')).toBe(false)
+  })
+})
+
+test.describe('the fix it prints', () => {
+  test('uses the -i form the platform actually accepts', () => {
+    // BSD sed on macOS requires an argument to -i and GNU sed refuses one, so a
+    // single form would be broken for half the people who paste it — and a
+    // command that fails is worse than no command, because it reads as another
+    // fault in the setup.
+    expect(fillCommand('GEMINI_API_KEY', 'darwin')).toContain("-i ''")
+    expect(fillCommand('GEMINI_API_KEY', 'linux')).toContain('-i ')
+    expect(fillCommand('GEMINI_API_KEY', 'linux')).not.toContain("-i ''")
+  })
+
+  test('anchors on the blank line so it cannot overwrite a real key', () => {
+    // `^KEY=$` matches only an empty value. Without the anchors, re-running it
+    // would clobber a credential someone had already set.
+    const command = fillCommand('GEMINI_API_KEY', 'darwin')
+    expect(command).toContain('^GEMINI_API_KEY=$')
+    expect(command).toContain('.env.local')
+  })
+
+  test('names the key it was asked about', () => {
+    expect(fillCommand('DEEPGRAM_API_KEY', 'darwin')).toContain('DEEPGRAM_API_KEY')
   })
 })

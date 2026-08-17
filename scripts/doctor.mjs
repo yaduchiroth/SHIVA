@@ -22,7 +22,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { IMPOSTORS, inspectEnv } from './lib/env-inspect.mjs'
+import { IMPOSTORS, fillCommand, inspectEnv, isUntouchedTemplate } from './lib/env-inspect.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -95,13 +95,20 @@ if (!hasEnvLocal && envFiles.length > 0) {
 section('2. .env.local contents')
 
 let values = new Map()
+let lineOf = new Map()
+/** True when the file is the template, copied and not yet filled in. */
+let untouched = false
+
 if (hasEnvLocal) {
   const text = await readFile(join(ROOT, '.env.local'), 'utf8').catch(() => null)
+  const example = await readFile(join(ROOT, '.env.example'), 'utf8').catch(() => null)
   if (text === null) {
     fail('.env.local exists but could not be read.')
   } else {
     const result = inspectEnv(text)
     values = result.values
+    lineOf = result.lineOf ?? new Map()
+    untouched = isUntouchedTemplate(values, text, example ?? undefined)
     for (const finding of result.findings) {
       if (finding.level === 'fail') fail(finding.message)
       else line(`[${WARN}] ${finding.message}`)
@@ -129,7 +136,31 @@ if (
 }
 
 if (!geminiKey) {
-  fail('No GEMINI_API_KEY anywhere. The brain cannot start.')
+  // One cause, one failure. Reporting both "the template is untouched" and "no
+  // key anywhere" describes the same fact twice and makes the fix look like two
+  // problems.
+  if (untouched) {
+    fail(
+      '.env.local is the template, copied but not filled in — every credential ' +
+        'line is still blank.\n' +
+        '         Nothing is broken; there is one step left. Without opening an editor:\n' +
+        `           ${fillCommand('GEMINI_API_KEY')}\n` +
+        '         Get a key at https://aistudio.google.com/apikey',
+    )
+  } else if (lineOf.has('GEMINI_API_KEY')) {
+    // The line is there and empty. "Missing" would send someone to add a key
+    // that is already present as a blank — in a 3.6 KB file of commentary,
+    // which is a genuinely annoying thing to be told.
+    fail(
+      `GEMINI_API_KEY is on line ${lineOf.get('GEMINI_API_KEY')} of .env.local but has no value.\n` +
+        `         Fill it in, or run:  ${fillCommand('GEMINI_API_KEY')}`,
+    )
+  } else {
+    fail(
+      'No GEMINI_API_KEY in .env.local or the environment. The brain cannot start.\n' +
+        '         Add a line:  GEMINI_API_KEY=your_key_here',
+    )
+  }
 }
 
 // ── 3. Ask Google, rather than assuming ──────────────────────────────────────
@@ -215,6 +246,7 @@ const deepgram = process.env.DEEPGRAM_API_KEY?.trim() || values.get('DEEPGRAM_AP
 if (!deepgram) {
   // Not a failure. Live voice is optional and the wake-word path works without it.
   line('  Not set — the Live button stays disabled, everything else works.')
+  if (untouched) line(`  To enable it later:  ${fillCommand('DEEPGRAM_API_KEY')}`)
 } else {
   line(`  Present: ${shape(deepgram)}`)
   try {

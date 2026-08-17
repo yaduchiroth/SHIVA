@@ -23,8 +23,14 @@ To enable the brain, add one key:
 
 ```bash
 cp .env.example .env.local
-# then set GEMINI_API_KEY — https://aistudio.google.com/apikey
+sed -i '' 's|^GEMINI_API_KEY=$|GEMINI_API_KEY=your_key_here|' .env.local   # macOS
 ```
+
+Copying the template is only half of it — every value in it is blank. Editing a
+dotfile is where this usually goes wrong on macOS (Finder hides it, TextEdit
+saves it as `.env.local.txt`), so the `sed` line above avoids the editor
+entirely. Drop the `''` after `-i` on Linux. Get a key at
+https://aistudio.google.com/apikey
 
 Without it everything still runs; SHIVA simply reports that it has no key
 rather than pretending to think.
@@ -56,7 +62,12 @@ parses `.env.local` strictly, and then **actually asks Google** whether the key
 and model work, rather than checking that a string is non-empty and calling that
 configured.
 
-Three things it catches that are invisible otherwise:
+Four things it catches that are invisible otherwise:
+
+- **A template you copied and never filled in.** `cp .env.example .env.local`
+  leaves every credential blank, which is not a fault — it is one step left —
+  and the doctor prints the `sed` line that finishes it without opening an
+  editor.
 
 - **`.env.local.txt`.** TextEdit appends `.txt` silently and Finder hides
   dotfiles, so the file you edited may not be the file Next.js reads.
