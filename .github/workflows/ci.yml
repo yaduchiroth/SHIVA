@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  # A superseded push has nothing useful to tell us; cancel it rather than
+  # queueing behind the run that matters.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `postinstall` vendors the MediaPipe WASM and downloads the 7.8 MB hand
+      # landmarker model. Cached across runs so CI isn't refetching it every time.
+      - name: Cache tracking assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            public/models
+            public/mediapipe
+          key: mediapipe-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # GitHub runners have no GPU, so this exercises the WebGL path under
+      # SwiftShader. The suite knows the difference and skips throughput
+      # assertions accordingly — see tests/helpers.ts.
+      - run: npm test
+        env:
+          CI: 'true'
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

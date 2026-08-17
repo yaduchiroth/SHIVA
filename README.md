@@ -27,6 +27,15 @@ control and everything remains usable.
 phone or tablet over your LAN you need HTTPS; plain `http://192.168.x.x` will
 report the camera as unavailable.
 
+### Controls
+
+| | Hand | Pointer |
+| --- | --- | --- |
+| Rotate | Swipe | Drag, scroll, or ← → |
+| Grab | Pinch | Press and hold |
+| Expand | Fist | Click, Enter |
+| Dismiss | Open palm | Escape |
+
 ## Commands
 
 | Command | Purpose |
@@ -35,8 +44,15 @@ report the camera as unavailable.
 | `npm run build` | Production build |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run lint` | ESLint |
-| `npm test` | Playwright smoke + performance suite |
+| `npm test` | Playwright render + performance suite |
 | `npm run assets` | Re-fetch MediaPipe assets |
+
+### Quality override
+
+`?quality=low`, `?quality=medium` or `?quality=high` pins the render tier and
+stops the runtime governor from moving it. Useful for checking how the interface
+degrades without hunting for a slower machine. Without it, the tier is chosen
+from device probing and adjusted at runtime from measured frame times.
 
 ## Architecture
 
@@ -60,6 +76,22 @@ with React subscribers would re-render the tree at tracking rate.
 **All interaction goes through one event bus.** The gesture recognizer and the
 pointer fallback publish the same events, so a mouse and a hand drive identical
 downstream behaviour instead of two code paths that drift apart.
+
+**Nothing fabricates data.** Readouts show real values or say plainly that they
+can't. Panels whose data source arrives in a later phase are labelled as such on
+their face rather than filled with plausible-looking placeholder numbers.
+
+## Testing
+
+`npm test` runs Playwright against a production build. The suite reads pixels
+back off the canvas rather than only asserting on the DOM — the failure mode
+worth catching is a WebGL app that mounts cleanly and renders a black rectangle.
+
+CI has no GPU, so Chromium falls back to SwiftShader at well under one frame per
+second on this scene. The suite distinguishes the two kinds of assertion:
+correctness properties that hold at any speed are always checked, while
+throughput assertions skip with a visible reason when there's no real GPU. See
+`tests/helpers.ts`.
 
 ## Deployment
 
