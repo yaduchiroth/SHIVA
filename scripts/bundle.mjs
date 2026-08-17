@@ -31,10 +31,11 @@ import { spawnSync } from 'node:child_process'
 import { rm, stat } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { exists, find, human, weigh } from './lib/fsutil.mjs'
+import { find, human, weigh } from './lib/fsutil.mjs'
+import { explainMissingStandalone, findStandaloneRoot } from './lib/standalone.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const OUT = join(ROOT, '.next', 'standalone')
+const BASE = join(ROOT, '.next', 'standalone')
 const ARCHIVE = join(ROOT, 'shiva-deploy.tar.gz')
 
 const line = (s = '') => console.log(s)
@@ -47,16 +48,13 @@ const section = (title) => {
 
 const withEnv = !process.argv.includes('--no-env')
 
-// ── The bundle must be a standalone build, not an ordinary one ───────────────
-if (!(await exists(join(OUT, 'server.js')))) {
-  console.error('No standalone build at .next/standalone.')
-  console.error('')
-  console.error('An ordinary `npm run build` does not produce one — the output mode')
-  console.error('is gated behind BUILD_STANDALONE so local development is untouched.')
-  console.error('')
-  console.error('  npm run build:standalone')
+// ── The bundle must be a standalone build, in the place everything expects ───
+const found = await findStandaloneRoot(BASE)
+if (!found || found.nested) {
+  console.error(explainMissingStandalone(found, BASE))
   process.exit(1)
 }
+const OUT = found.path
 
 // ── Assembly and verification live in pack; do not duplicate them ────────────
 section('1. Assembling and verifying')

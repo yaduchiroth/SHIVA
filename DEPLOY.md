@@ -86,6 +86,24 @@ Linux. SHIVA has no images at all, so it is removed: a quarter of the bundle and
 the whole portability problem, gone. The script then _checks_ that no native
 binaries remain rather than assuming.
 
+### If the build warns about your workspace root
+
+```
+⚠ Next.js inferred your workspace root ... selected the directory of
+  /Users/you/package-lock.json as the root directory
+```
+
+A stray `package-lock.json` **above** this project — typically left by running
+`npm install` in a home directory — makes Next infer that directory as the root,
+and standalone output preserves the path from the root. The build succeeds and
+puts `server.js` at `.next/standalone/SHIVA/server.js` instead, one level deeper
+than everything expects.
+
+`next.config.ts` pins `outputFileTracingRoot`, so this cannot happen on a current
+checkout. If you see the warning anyway you are building against an older config
+— `git pull` and rebuild. Deleting the stray lockfile is also worth doing; it
+will confuse other tools the same way.
+
 The archive contains `.env.local`, so **it holds your API keys** — don't share
 it, and delete it once uploaded. `npm run bundle -- --no-env` omits it if you'd
 rather set credentials in hPanel.

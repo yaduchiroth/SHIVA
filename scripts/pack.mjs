@@ -21,21 +21,30 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { exists, human as mb, weigh } from './lib/fsutil.mjs'
 import { inspectEnv, isUntouchedTemplate } from './lib/env-inspect.mjs'
+import { explainMissingStandalone, findStandaloneRoot } from './lib/standalone.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const OUT = join(ROOT, '.next', 'standalone')
+const BASE = join(ROOT, '.next', 'standalone')
+
+// Located rather than assumed — a build whose workspace root was inferred from
+// a lockfile above the project lands one directory deeper, and saying "no
+// standalone build" for that is a wrong diagnosis, not a missing one.
+const found = await findStandaloneRoot(BASE)
+if (!found) {
+  console.error(explainMissingStandalone(found, BASE))
+  process.exit(1)
+}
+if (found.nested) {
+  console.error(explainMissingStandalone(found, BASE))
+  process.exit(1)
+}
+const OUT = found.path
 
 const line = (s = '') => console.log(s)
 const problems = []
 const fail = (message) => {
   problems.push(message)
   console.error(`[FAIL] ${message}`)
-}
-
-if (!(await exists(join(OUT, 'server.js')))) {
-  console.error('No standalone build found at .next/standalone.')
-  console.error('Build with the flag set:  BUILD_STANDALONE=1 npm run build')
-  process.exit(1)
 }
 
 line('Assembling .next/standalone')

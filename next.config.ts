@@ -1,7 +1,28 @@
 import type { NextConfig } from 'next'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  /**
+   * Pin the workspace root to this directory.
+   *
+   * Next infers the root from the nearest lockfile, and standalone output
+   * preserves the path from that root. So a stray `package-lock.json` anywhere
+   * ABOVE the checkout — one left behind by running `npm install` in a home
+   * directory, say — silently moves the build output to
+   * `.next/standalone/<project-folder>/server.js`.
+   *
+   * The build still succeeds. Nothing errors. The bundle simply is not where
+   * every deploy step expects it, and the warning that explains why scrolls past
+   * above a wall of successful build output. This happened on a real machine and
+   * cost a deploy attempt.
+   *
+   * Pinning it makes the output location a property of this repository rather
+   * than of whatever happens to exist in the directories above it.
+   */
+  outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
 
   // Standalone output emits a self-contained server with only the dependencies
   // it actually needs — worth a lot on constrained hosting, where shipping the
