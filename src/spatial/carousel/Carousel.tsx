@@ -123,8 +123,10 @@ export function Carousel({
       const eased = prominence * prominence
 
       const isFocused = focused === i
-      // A focused panel leaves the ring and comes to meet the viewer.
-      const radius = isFocused ? RADIUS * 0.42 : RADIUS
+      // A focused panel steps OUT of the ring, toward the viewer. The camera
+      // sits at +z, so that means a larger radius — pulling it inward would move
+      // it further away and make it smaller, which is the opposite of focus.
+      const radius = isFocused ? RADIUS * 1.08 : RADIUS
 
       slot.position.set(sin * radius, 0, cos * radius)
 

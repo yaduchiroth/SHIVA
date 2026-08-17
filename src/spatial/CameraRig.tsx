@@ -18,8 +18,15 @@ import { useGestureStore } from '@/core/store/useGestureStore'
  * you.
  */
 
-const BASE = new THREE.Vector3(0, 0.6, 9.5)
-const FOCUSED = new THREE.Vector3(0, 0.3, 7.2)
+// Framing: the ring sits at radius 4.6, so the front panel is ~6.9 units away
+// from here. At a 42° fov that puts a 3.4-unit panel at roughly two-thirds of
+// frame height — enough presence to be the subject, with the neighbouring
+// panels still legible either side. Closer than this and the front panel is
+// cropped by the frame edges.
+const BASE = new THREE.Vector3(0, 0.6, 11.5)
+// Focused: close enough that the panel fills ~85% of frame height, which is
+// what makes committing to a panel feel like stepping up to it.
+const FOCUSED = new THREE.Vector3(0, 0.5, 10.3)
 
 export function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
   const camera = useThree((s) => s.camera)
@@ -66,7 +73,8 @@ export function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
 
     // Aim slightly above origin so the carousel sits in the lower two-thirds —
     // headroom reads as composed, dead-centre reads as a screensaver.
-    lookAt.current.set(0, focused !== null ? 0.1 : 0.35, 0)
+    // A focused panel rides higher on the ring, so the aim has to rise with it.
+    lookAt.current.set(0, focused !== null ? 0.45 : 0.35, 0)
     camera.lookAt(lookAt.current)
   })
 

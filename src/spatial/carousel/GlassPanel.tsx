@@ -64,7 +64,19 @@ interface Props {
   register: (index: number, api: PanelApi | null) => void
 }
 
-function makePanelGeometry(): THREE.ExtrudeGeometry {
+/**
+ * The panel slab, plus where its faces actually are.
+ *
+ * The bevel matters here for a non-obvious reason: `ExtrudeGeometry` adds
+ * `bevelThickness` to BOTH ends, so a slab authored at depth 0.14 really spans
+ * ±0.09, not ±0.07. Placing the content and edge planes at ±PANEL_D/2 buried
+ * them inside the glass, where the transmission material's depth write culled
+ * them — panels rendered as empty sheets with no content and no rim.
+ *
+ * Returning the measured bounds instead of recomputing the arithmetic keeps
+ * that fixed if the bevel is ever retuned.
+ */
+function makePanelGeometry(): { geometry: THREE.ExtrudeGeometry; front: number; back: number } {
   const r = 0.16
   const w = PANEL_W / 2
   const h = PANEL_H / 2
@@ -90,7 +102,9 @@ function makePanelGeometry(): THREE.ExtrudeGeometry {
     curveSegments: 8,
   })
   geo.center()
-  return geo
+  geo.computeBoundingBox()
+  const box = geo.boundingBox!
+  return { geometry: geo, front: box.max.z, back: box.min.z }
 }
 
 export function GlassPanel({
@@ -108,7 +122,7 @@ export function GlassPanel({
   const content = useRef<THREE.MeshBasicMaterial>(null)
   const edge = useRef<THREE.MeshBasicMaterial>(null)
 
-  const geometry = useMemo(() => makePanelGeometry(), [])
+  const { geometry, front, back } = useMemo(() => makePanelGeometry(), [])
   const texture = useMemo(() => createPanelTexture(module, index), [module, index])
   const accentColor = useMemo(() => new THREE.Color(resolveColor(module.accent)), [module.accent])
 
@@ -236,12 +250,16 @@ export function GlassPanel({
             color="#cfd8ee"
             attenuationColor="#8fa4c8"
             attenuationDistance={2.4}
+            // Drives how strongly the studio environment shows up in the glass.
+            // Above 1 so the bevels catch a definite highlight rather than a
+            // grey sheen — this is what makes the panels read as solid objects.
+            envMapIntensity={1.6}
           />
         </mesh>
 
-        {/* Content, floated just proud of the glass so it reads as projected
-            onto the surface rather than embedded in it. */}
-        <mesh position={[0, 0, PANEL_D / 2 + 0.012]}>
+        {/* Content, floated just proud of the measured front face so it reads
+            as projected onto the surface rather than embedded in it. */}
+        <mesh position={[0, 0, front + 0.012]}>
           <planeGeometry args={[PANEL_W * 0.92, PANEL_H * 0.92]} />
           <meshBasicMaterial
             ref={content}
@@ -253,8 +271,9 @@ export function GlassPanel({
           />
         </mesh>
 
-        {/* Emissive edge — the element bloom latches onto. */}
-        <mesh position={[0, 0, -PANEL_D / 2 - 0.004]}>
+        {/* Emissive edge behind the slab — the element bloom latches onto,
+            seen through the glass. */}
+        <mesh position={[0, 0, back - 0.006]}>
           <planeGeometry args={[PANEL_W * 1.015, PANEL_H * 1.012]} />
           <meshBasicMaterial
             ref={edge}

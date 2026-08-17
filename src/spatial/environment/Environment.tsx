@@ -7,6 +7,7 @@ import type { QualitySettings } from '@/core/config/quality'
 import { InfiniteGrid } from './InfiniteGrid'
 import { LightSource } from './LightSource'
 import { Particulate } from './Particulate'
+import { StudioEnvironment } from './StudioEnvironment'
 import { VolumetricFog } from './VolumetricFog'
 
 /**
@@ -40,6 +41,10 @@ export function Environment({ quality, reducedMotion, sunRef }: Props) {
       {/* Exponential-squared fog: the far plane should dissolve, not clip. */}
       <fogExp2 attach="fog" args={['#07070a', quality.fogDensity]} />
       <color attach="background" args={['#060607']} />
+
+      {/* Reflection/refraction source for the glass. Without it the panels are
+          transparent onto a black void and effectively invisible. */}
+      <StudioEnvironment intensity={1.15} />
 
       <ambientLight intensity={0.28} color="#8fa4c8" />
 
