@@ -1,0 +1,154 @@
+@import 'tailwindcss';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SHIVA design tokens — Industrial Spatial Computing
+   Apple Vision Pro depth · Teenage Engineering restraint · Nothing's mono
+   type · Linear's precision · FUI density.
+
+   Deliberately NOT "Iron Man UI": no cyan-on-black neon, no rotating
+   holographic nonsense. Near-monochrome with a single restrained accent,
+   earning colour only where it carries meaning.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Ground: warm-shifted near-blacks. Pure #000 kills the sense of volume —
+     the fog and bloom need something to lift off. */
+  --color-void: #060607;
+  --color-abyss: #0a0a0c;
+  --color-carbon: #121215;
+  --color-graphite: #1c1c21;
+  --color-steel: #2a2a31;
+  --color-ash: #4a4a55;
+  --color-smoke: #7a7a88;
+  --color-mist: #b4b4c0;
+  --color-bone: #e8e8ec;
+
+  /* Accent: a cold industrial white-blue used as *light*, not as paint. */
+  --color-signal: #d6e4ff;
+  --color-signal-dim: #8fa4c8;
+
+  /* Semantic — the only saturated colour in the system, reserved for state. */
+  --color-nominal: #4ade9a;
+  --color-caution: #f0b429;
+  --color-critical: #ff5a52;
+  --color-tracking: #7c9cff;
+
+  --font-mono:
+    'Berkeley Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Type scale: HUD text is small and tightly tracked — density reads as
+     instrumentation, generosity reads as marketing. */
+  --text-micro: 0.5625rem;
+  --text-hud: 0.6875rem;
+  --text-label: 0.8125rem;
+
+  --tracking-hud: 0.14em;
+  --tracking-wide: 0.24em;
+
+  --radius-panel: 14px;
+  --radius-chip: 6px;
+
+  /* Motion: one easing curve for entrances, one for exits. Consistency in
+     timing is what separates an OS from a collection of animations. */
+  --ease-spatial: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-snap: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast: 180ms;
+  --duration-base: 420ms;
+  --duration-slow: 900ms;
+}
+
+@layer base {
+  * {
+    /* An OS doesn't have a scroll gutter. */
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-void);
+    color: var(--color-mist);
+    font-family: var(--font-mono);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Spatial input is gestural; native gestures (pinch-zoom, pull-to-refresh,
+       text selection on drag) actively fight it. */
+    overscroll-behavior: none;
+    touch-action: none;
+    user-select: none;
+  }
+
+  canvas {
+    display: block;
+    outline: none;
+  }
+
+  /* Anyone who has asked the OS to calm down gets a calmer OS. Honoured in JS
+     too (see useReducedMotion) — this only covers CSS transitions. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* The HUD is an overlay on a 3D world: it must never eat pointer events
+     except where explicitly re-enabled. */
+  .hud-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .hud-cluster {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    font-size: var(--text-hud);
+    letter-spacing: var(--tracking-hud);
+    text-transform: uppercase;
+    color: var(--color-smoke);
+    /* Glass over a bright 3D scene needs its own contrast floor. */
+    text-shadow: 0 0 12px rgb(0 0 0 / 0.9);
+  }
+
+  .hud-rule {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--color-ash) 70%, transparent),
+      transparent
+    );
+  }
+
+  /* Glassmorphism for DOM-layer surfaces. The 3D panels use
+     MeshTransmissionMaterial instead — this is for HUD chrome only. */
+  .glass-surface {
+    background: color-mix(in oklab, var(--color-carbon) 55%, transparent);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid color-mix(in oklab, var(--color-bone) 8%, transparent);
+    border-radius: var(--radius-panel);
+    box-shadow:
+      0 1px 0 0 color-mix(in oklab, var(--color-bone) 6%, transparent) inset,
+      0 24px 64px -24px rgb(0 0 0 / 0.9);
+  }
+}
+
+@utility text-hud-label {
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-ash);
+}

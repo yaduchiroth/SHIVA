@@ -1,0 +1,26 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Vendored at install time by scripts/fetch-assets.mjs — never commit binaries.
+public/mediapipe/
+public/models/
+
+.env
+.env.local
+.env*.local
+
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+next-env.d.ts
+
+.DS_Store
+.vercel
+
+test-results/
+playwright-report/
+blob-report/
+.playwright/
