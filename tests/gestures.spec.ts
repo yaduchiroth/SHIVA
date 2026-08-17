@@ -139,9 +139,12 @@ test.describe('gesture recognition', () => {
       recognizer.update(handPose({ origin: { x: 0.25, y: 0.7 } }), i / 30, out)
     }
 
-    // Sweep left-to-right across the frame over ~0.27s — a deliberate swipe.
+    // Sweep across the frame at ~2.4 normalised units/sec, which is what a
+    // deliberate swipe actually measures. The earlier version of this test used
+    // 1.5 — indistinguishable from someone repositioning their hand, and the
+    // reason the carousel used to step while nobody was gesturing.
     for (let i = 0; i < 8; i++) {
-      const x = 0.25 + (i + 1) * 0.05
+      const x = 0.25 + (i + 1) * 0.08
       recognizer.update(handPose({ origin: { x, y: 0.7 } }), (10 + i) / 30, out)
     }
 
@@ -166,6 +169,29 @@ test.describe('gesture recognition', () => {
     expect(swipes.length, 'repositioning must not read as a command').toBe(0)
   })
 
+  test('casual hand movement does not fire a swipe', () => {
+    // The reported symptom, as a test. Moving a hand across the frame at a
+    // conversational pace — around 1 normalised unit/sec, roughly what you do
+    // reaching for something — used to clear the 0.9 threshold and step the
+    // carousel. It is not a slow drift and it is not a swipe; it is the speed
+    // people move at when they are not gesturing at all, and it was the gap
+    // between those two that "too sensitive" meant.
+    const swipes: EventMap['gesture:swipe'][] = []
+    on('gesture:swipe', (e) => swipes.push(e))
+
+    const recognizer = new HandRecognizer('right')
+    const out = emptyHand()
+    for (let i = 0; i < 10; i++) {
+      recognizer.update(handPose({ origin: { x: 0.25, y: 0.7 } }), i / 30, out)
+    }
+    for (let i = 0; i < 14; i++) {
+      const x = 0.25 + (i + 1) * 0.033
+      recognizer.update(handPose({ origin: { x, y: 0.7 } }), (10 + i) / 30, out)
+    }
+
+    expect(swipes.length, 'casual movement must not read as a command').toBe(0)
+  })
+
   test('a fist swept sideways does not swipe', () => {
     // Swipe requires an open palm precisely so that carrying a grabbed panel
     // across the frame doesn't also rotate the ring underneath it.
@@ -182,7 +208,7 @@ test.describe('gesture recognition', () => {
       )
     }
     for (let i = 0; i < 8; i++) {
-      const x = 0.25 + (i + 1) * 0.05
+      const x = 0.25 + (i + 1) * 0.08
       recognizer.update(
         handPose({ fingers: [1, 1, 1, 1], thumb: 0.9, origin: { x, y: 0.7 } }),
         (10 + i) / 30,

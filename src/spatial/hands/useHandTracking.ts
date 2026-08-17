@@ -8,6 +8,7 @@ import { getQuality } from '@/core/config/quality'
 import { handFrame, resetHand, resetHandFrame } from '@/core/hands/handFrame'
 import { emit } from '@/core/events/bus'
 import { canUseCamera } from '@/lib/device'
+import { resolveSensitivityFromUrl } from '@/core/config/sensitivity'
 import { HandRecognizer } from './gestureRecognizer'
 import { BimanualRecognizer } from './bimanual'
 import { setTrackingVideo } from './videoSource'
@@ -84,6 +85,10 @@ export function useHandTracking() {
 
   const start = useCallback(async () => {
     if (running.current) return
+
+    // `?sensitivity=low|normal|high`. Read here rather than at module scope so
+    // the recognizers, which tests import without a DOM, stay window-free.
+    resolveSensitivityFromUrl()
 
     if (!canUseCamera()) {
       setStatus(

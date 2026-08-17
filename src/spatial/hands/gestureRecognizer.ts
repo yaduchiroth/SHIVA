@@ -2,6 +2,7 @@ import type { Handedness, HandState, Vec3 } from '@/core/types'
 import type { GestureName } from '@/core/types'
 import { OneEuroVec3, OneEuroFilter } from '@/lib/one-euro'
 import { Schmitt, clamp } from '@/lib/math'
+import { getSensitivity } from '@/core/config/sensitivity'
 import { emit } from '@/core/events/bus'
 
 /**
@@ -38,19 +39,6 @@ export interface Landmark {
 
 const dist = (a: Landmark, b: Landmark): number =>
   Math.hypot(a.x - b.x, a.y - b.y, (a.z - b.z) * 0.5)
-
-/**
- * Fingertip-to-wrist distance, in palm widths, above which a finger counts as
- * straight and below which it counts as folded.
- *
- * The gap between them is a deliberate dead zone. A hand hanging naturally
- * lands inside it, so no gesture fires — which is what stops the interface
- * reacting to someone who is simply resting. Widening the gap costs
- * sensitivity; narrowing it costs false positives. These values leave roughly
- * 20% margin either side of a relaxed hand.
- */
-const EXTENDED = 1.7
-const CURLED = 1.35
 
 /** How much fingertip history the circle detector considers, in seconds. */
 const CIRCLE_WINDOW_S = 1.6
@@ -220,6 +208,10 @@ export class HandRecognizer {
       return
     }
 
+    // Read once per frame rather than captured at construction, so changing
+    // profile takes effect immediately instead of on the next camera restart.
+    const tuning = getSensitivity()
+
     // Hand scale: the reference length everything else is measured against.
     // Guarded because a near-degenerate hand (edge of frame, mid-occlusion)
     // would otherwise divide by ~0 and produce enormous ratios.
@@ -269,12 +261,15 @@ export class HandRecognizer {
     // Each finger is straight, folded, or neither. The gap between the two
     // thresholds is the point: a hand resting naturally sits inside it and
     // resolves to no gesture at all, so SHIVA doesn't react to someone who
-    // isn't asking for anything.
+    // isn't asking for anything. How wide that gap is — and therefore how much
+    // a resting hand has to change before anything fires — is the single
+    // biggest lever on whether the interface feels calm or twitchy. See
+    // core/config/sensitivity.ts for the measurements behind it.
     let extendedCount = 0
     let curledCount = 0
     for (const e of extension) {
-      if (e > EXTENDED) extendedCount++
-      else if (e < CURLED) curledCount++
+      if (e > tuning.extended) extendedCount++
+      else if (e < tuning.curled) curledCount++
     }
 
     // ── Grab ─────────────────────────────────────────────────────────────────
@@ -302,7 +297,10 @@ export class HandRecognizer {
     // ignored: plenty of people point with it half-raised, and demanding it be
     // folded rejects a perfectly clear pointing hand.
     const pointing =
-      extension[0]! > EXTENDED && extension[1]! < CURLED && extension[2]! < CURLED && !pinching
+      extension[0]! > tuning.extended &&
+      extension[1]! < tuning.curled &&
+      extension[2]! < tuning.curled &&
+      !pinching
 
     // ── Resolve to one gesture ───────────────────────────────────────────────
     // Priority matters: a pinch is a subset of many hand shapes, so it must be
@@ -347,7 +345,7 @@ export class HandRecognizer {
       palmOpen &&
       !pinching &&
       !grabbing &&
-      horizontal > 0.9 &&
+      horizontal > tuning.swipeSpeed &&
       horizontal > Math.abs(out.velocity.y) * 1.8
     ) {
       // x is mirrored on screen, so a hand moving right in tracking space
@@ -357,7 +355,7 @@ export class HandRecognizer {
         direction: out.velocity.x > 0 ? -1 : 1,
         speed: horizontal,
       })
-      this.swipeCooldown = 0.55
+      this.swipeCooldown = tuning.swipeCooldown
     }
 
     // Mirror the raw landmarks for the debug overlay. Copied field-by-field

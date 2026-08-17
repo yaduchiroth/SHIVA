@@ -1,6 +1,7 @@
 import { getHand } from '@/core/hands/handFrame'
 import { emit } from '@/core/events/bus'
 import { clamp } from '@/lib/math'
+import { getSensitivity } from '@/core/config/sensitivity'
 
 /**
  * Two-handed gestures.
@@ -29,24 +30,9 @@ import { clamp } from '@/lib/math'
  * reassuring thing about them.
  */
 
-/**
- * Normalised movement below this is treated as stillness.
- *
- * Two hands held deliberately still still drift by a fraction of a percent, and
- * without a floor that drift becomes a slow unbidden rotation — the interface
- * turning on its own while you hold a pose, which reads as broken rather than
- * sensitive.
- */
-const DEAD_ZONE = 0.0015
-
-/**
- * Panels turned per unit of normalised hand travel.
- *
- * Chosen to match the pointer: sweeping hands across half the frame turns the
- * ring about two panels, which is roughly what dragging half the window does.
- * The two input paths should feel like the same gesture, not two different ones.
- */
-const SPIN_GAIN = 4
+// The spin gain and the stillness floor live in core/config/sensitivity.ts,
+// alongside the single-hand thresholds — they are the same question (how much
+// must you move before anything happens) and were tuned together.
 
 /**
  * Per-frame zoom clamp.
@@ -113,6 +99,8 @@ export class BimanualRecognizer {
 
     if (!this.active) return
 
+    const tuning = getSensitivity()
+
     // x is mirrored so that moving both hands right turns the ring the way a
     // physical object would. Same convention as everywhere else in the tracker.
     const midX = 1 - (left.position.x + right.position.x) / 2
@@ -123,8 +111,8 @@ export class BimanualRecognizer {
 
     if (this.lastMidX !== null) {
       const delta = midX - this.lastMidX
-      if (Math.abs(delta) > DEAD_ZONE) {
-        emit('world:spin', { delta: delta * SPIN_GAIN })
+      if (Math.abs(delta) > tuning.spinDeadZone) {
+        emit('world:spin', { delta: delta * tuning.spinGain })
       }
     }
 

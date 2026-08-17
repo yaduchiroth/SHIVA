@@ -143,6 +143,32 @@ missing variable, the reason a fetch failed, or "not connected". An empty chart
 would read as _zero_, which is the difference between an instrument and a
 decoration.
 
+### If gestures feel too eager
+
+`?sensitivity=low` — or `high` to go back to the original tuning and feel the
+difference.
+
+The thresholds are stated in palm widths, measured from the wrist to each
+fingertip. A hand hanging at rest reads about **1.54**; a deliberate fist reads
+**0.88** and an open palm **2.08**. The default dead zone runs **1.15 → 1.85**,
+which puts a resting hand a fifth of the way clear of both edges. The original
+was 1.35 → 1.70 — a tenth of a palm width either side — so any hand that curled
+slightly more than the model's, or straightened slightly less, sat brushing a
+threshold and fired gestures nobody made.
+
+The swipe threshold matters just as much and is less obvious. Repositioning your
+hand runs near 1 normalised unit/sec; a real swipe is around 2.4. The original
+threshold was 0.9 — _below_ casual movement — so the ring stepped while you were
+only reaching for something. It is 1.5 now.
+
+| profile  | dead zone   | swipe | two-hand spin |
+| -------- | ----------- | ----- | ------------- |
+| `low`    | 1.05 – 1.95 | 2.0   | 1.5           |
+| `normal` | 1.15 – 1.85 | 1.5   | 2.2           |
+| `high`   | 1.35 – 1.70 | 0.9   | 4.0           |
+
+All of it lives in `src/core/config/sensitivity.ts`.
+
 ### Verifying hand tracking
 
 Add `?debug=hands` to see the tracking inspector: the mirrored camera feed with

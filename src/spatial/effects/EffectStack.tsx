@@ -66,10 +66,15 @@ export function EffectStack({ quality, sun }: Props) {
         <GodRays
           sun={sun}
           samples={40}
-          density={0.94}
-          decay={0.92}
-          weight={0.32}
-          exposure={0.32}
+          density={0.96}
+          decay={0.93}
+          // Raised to compensate for a much smaller emitter. The pass scales
+          // its output by how much light it finds along each ray, so shrinking
+          // the source from a sixth of the frame to under a degree removed
+          // almost all of it — the shafts were faint before precisely because
+          // the ball was doing the work instead.
+          weight={0.52}
+          exposure={0.46}
           clampMax={1}
           // Half-res with a wide kernel: shafts are inherently soft, so paying
           // for full resolution buys nothing visible.
