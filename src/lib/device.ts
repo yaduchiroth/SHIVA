@@ -139,6 +139,18 @@ export function isHandDebugEnabled(): boolean {
   return new URLSearchParams(window.location.search).get('debug') === 'hands'
 }
 
+/**
+ * Whether to seed one of every AR surface (`?surfaces=demo`).
+ *
+ * Judging whether the wall looks right needs a real GPU and a human, and
+ * neither is available in CI. This makes that a URL parameter rather than a
+ * conversation with the brain.
+ */
+export function isSurfaceDemoEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('surfaces') === 'demo'
+}
+
 /** Secure context is a hard requirement for getUserMedia outside localhost. */
 export function canUseCamera(): boolean {
   if (typeof window === 'undefined') return false

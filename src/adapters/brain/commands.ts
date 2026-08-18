@@ -75,6 +75,81 @@ export const TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'show_card',
+    description:
+      'Put a short written note on a floating AR surface in the room. Use for a summary, an answer worth keeping visible, or a list of a few items. For anything with structure — tables, headings, columns — use show_report instead.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short label for the surface header.' },
+        body: { type: 'string', description: 'Plain text. Line breaks are preserved.' },
+      },
+      required: ['title', 'body'],
+    },
+  },
+  {
+    name: 'show_report',
+    description:
+      'Put a rich HTML report on a floating AR surface: headings, tables, lists, inline SVG. Dark theme is applied automatically — do not set background colours or fonts. Scripts do not run, so do not include any. Use when the user asks for a report, breakdown, comparison or dashboard that a single card cannot hold.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        html: { type: 'string', description: 'Body markup only — no <html>, <head> or <script>.' },
+      },
+      required: ['title', 'html'],
+    },
+  },
+  {
+    name: 'show_chart',
+    description:
+      'Plot numeric series on a floating AR surface. The axis starts at zero, so send real magnitudes rather than pre-scaled values.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        type: { type: 'string', enum: ['bar', 'line'] },
+        labels: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'One label per data point along the x axis.',
+        },
+        series: {
+          type: 'array',
+          description: 'One entry per line or bar group.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              values: { type: 'array', items: { type: 'number' } },
+            },
+            required: ['name', 'values'],
+          },
+        },
+        unit: { type: 'string', description: 'Optional unit, shown once in the corner.' },
+      },
+      required: ['title', 'type', 'series'],
+    },
+  },
+  {
+    name: 'open_page',
+    description:
+      'Embed a live web page on a floating AR surface. Many sites refuse to be framed and will show a notice saying so — that is expected, not a failure.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Full http(s) URL.' },
+        title: { type: 'string' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'clear_surfaces',
+    description: 'Remove every floating surface from the room. Use for "clear that", "tidy up".',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
     name: 'set_quality',
     description:
       'Change the render quality tier. Use when the user says the interface is slow or asks for higher fidelity.',
@@ -127,6 +202,12 @@ export function buildSystemPrompt(context: {
     'something, call the tool rather than describing what you would do. Before',
     'answering anything about system performance, local weather or repositories,',
     'call read_module and answer from what it returns, never from memory.',
+    '',
+    'You can also put things in the room. show_card, show_report, show_chart and',
+    'open_page each place a floating surface the user can reach out and touch.',
+    'Use them whenever the answer is something to LOOK at rather than listen to —',
+    'a comparison, a breakdown, a set of numbers over time. Then say one sentence',
+    'about what you put up; do not read the surface aloud, the user can see it.',
     '',
     `The carousel currently shows: ${context.activeModule}.`,
     conditions,

@@ -9,9 +9,11 @@ import { useHandTracking } from '@/spatial/hands/useHandTracking'
 import { useInteractionDriver, usePointerFallback } from '@/spatial/hands/useInteractionDriver'
 import { useAudioEngine } from '@/audio/useAudioEngine'
 import { useSystemStore } from '@/core/store/useSystemStore'
-import { getDeviceProfile, isHandDebugEnabled } from '@/lib/device'
+import { getDeviceProfile, isHandDebugEnabled, isSurfaceDemoEnabled } from '@/lib/device'
 import { HandDebugOverlay } from '@/hud/HandDebugOverlay'
 import { BrainConsole } from '@/hud/BrainConsole'
+import { seedDemoSurfaces } from '@/core/store/useSurfaceStore'
+import { installDevHooks, isDevHooksEnabled } from '@/lib/devHooks'
 
 /**
  * Top-level composition.
@@ -39,6 +41,8 @@ export function Shell() {
   useEffect(() => {
     setBoot('booting')
     if (!getDeviceProfile().supportsWebGL2) setWebglFailed(true)
+    if (isSurfaceDemoEnabled()) seedDemoSurfaces()
+    if (isDevHooksEnabled()) installDevHooks()
   }, [setBoot])
 
   const handleBootComplete = useCallback(() => setBoot('ready'), [setBoot])

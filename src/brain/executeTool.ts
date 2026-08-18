@@ -5,6 +5,7 @@ import { useSystemStore } from '@/core/store/useSystemStore'
 import { MODULES } from '@/core/config/modules'
 import { emit } from '@/core/events/bus'
 import { readPanel } from '@/spatial/carousel/panelContent'
+import { useSurfaceStore, type ChartSeries } from '@/core/store/useSurfaceStore'
 import type { ModuleId, QualityTierName } from '@/core/types'
 
 /**
@@ -65,6 +66,66 @@ export function executeTool(name: string, args: Record<string, unknown>): string
       return `${args.module}: ${readout.headline} — ${readout.caption}. ${rows}`
     }
 
+    case 'show_card': {
+      useSurfaceStore.getState().push({
+        kind: 'card',
+        title: String(args.title ?? ''),
+        body: String(args.body ?? ''),
+      })
+      return 'card placed in the room'
+    }
+
+    case 'show_report': {
+      const html = String(args.html ?? '')
+      if (!html.trim()) return 'nothing to show: the report was empty'
+      useSurfaceStore.getState().push({
+        kind: 'report',
+        title: String(args.title ?? ''),
+        html,
+      })
+      return 'report placed in the room'
+    }
+
+    case 'show_chart': {
+      // Models are inconsistent about this key — values, data and y all turn up
+      // — and a chart that silently renders nothing because the array was
+      // called the wrong thing is a bad failure. Odin's own HUD tool normalises
+      // the same three; this matches it deliberately.
+      const raw = Array.isArray(args.series) ? (args.series as Record<string, unknown>[]) : []
+      const series: ChartSeries[] = raw
+        .map((s) => ({
+          name: String(s?.name ?? s?.label ?? ''),
+          values: toNumbers(s?.values ?? s?.data ?? s?.y),
+        }))
+        .filter((s) => s.values.length > 0)
+
+      if (series.length === 0) return 'nothing to plot: no series had numeric values'
+
+      useSurfaceStore.getState().push({
+        kind: 'chart',
+        title: String(args.title ?? ''),
+        ctype: args.type === 'line' ? 'line' : 'bar',
+        labels: Array.isArray(args.labels) ? args.labels.map(String) : [],
+        series,
+        unit: String(args.unit ?? ''),
+      })
+      return `chart placed in the room (${series.length} series)`
+    }
+
+    case 'open_page': {
+      const url = String(args.url ?? '').trim()
+      // Anything but http(s) here is either a mistake or an attempt at
+      // javascript:/data: — neither belongs in a frame we are about to mount.
+      if (!/^https?:\/\//i.test(url)) return 'I need a full http or https URL'
+      useSurfaceStore.getState().push({ kind: 'web', url, title: String(args.title ?? url) })
+      return `opened ${url} in the room`
+    }
+
+    case 'clear_surfaces': {
+      useSurfaceStore.getState().clear()
+      return 'surfaces cleared'
+    }
+
     case 'set_quality': {
       const tier = args.tier as QualityTierName
       if (tier !== 'low' && tier !== 'medium' && tier !== 'high') return `unknown tier: ${tier}`
@@ -75,4 +136,12 @@ export function executeTool(name: string, args: Record<string, unknown>): string
     default:
       return `unknown tool: ${name}`
   }
+}
+
+/** Coerces whatever the model sent into a numeric array, dropping the rest. */
+function toNumbers(value: unknown): number[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((v) => (typeof v === 'number' ? v : Number(String(v).replace(/[^0-9eE+.-]/g, ''))))
+    .filter((n) => Number.isFinite(n))
 }

@@ -7,6 +7,7 @@ import { damp } from '@/lib/math'
 import { useSpatialStore } from '@/core/store/useSpatialStore'
 import { getPrimaryHand } from '@/core/hands/handFrame'
 import { useGestureStore } from '@/core/store/useGestureStore'
+import { CAMERA_BASE, CAMERA_FOCUSED } from '@/core/config/viewpoint'
 
 /**
  * Camera choreography.
@@ -23,10 +24,10 @@ import { useGestureStore } from '@/core/store/useGestureStore'
 // frame height — enough presence to be the subject, with the neighbouring
 // panels still legible either side. Closer than this and the front panel is
 // cropped by the frame edges.
-const BASE = new THREE.Vector3(0, 0.6, 11.5)
+const BASE = new THREE.Vector3(CAMERA_BASE.x, CAMERA_BASE.y, CAMERA_BASE.z)
 // Focused: close enough that the panel fills ~85% of frame height, which is
 // what makes committing to a panel feel like stepping up to it.
-const FOCUSED = new THREE.Vector3(0, 0.5, 10.3)
+const FOCUSED = new THREE.Vector3(CAMERA_FOCUSED.x, CAMERA_FOCUSED.y, CAMERA_FOCUSED.z)
 
 export function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
   const camera = useThree((s) => s.camera)

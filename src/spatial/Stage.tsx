@@ -15,6 +15,8 @@ import { Carousel } from './carousel/Carousel'
 import { HandCursors } from './hands/HandCursors'
 import { HolographicText } from './brain/HolographicText'
 import { Orb } from './orb/Orb'
+import { SurfaceWall } from './surfaces/SurfaceWall'
+import { HandPointer } from './hands/HandPointer'
 
 /**
  * The render surface.
@@ -77,7 +79,9 @@ export function Stage() {
         <Environment quality={quality} reducedMotion={reducedMotion} sunRef={setSun} />
         <Orb quality={quality} reducedMotion={reducedMotion} />
         <Carousel quality={quality} reducedMotion={reducedMotion} />
+        <SurfaceWall />
         <HandCursors />
+        <HandPointer />
         <HolographicText />
         <EffectStack quality={quality} sun={sun} />
         <Preload all />
