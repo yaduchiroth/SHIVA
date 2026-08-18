@@ -1,18 +1,45 @@
 import { expect, test } from '@playwright/test'
-import { samplePaint } from './helpers'
+import { samplePaint, sampleSharpness } from './helpers'
 
 /**
- * Every quality tier renders.
+ * Every quality tier renders, and renders sharply.
  *
- * Tiers mount genuinely different effect chains — the high tier adds god rays,
- * depth of field and chromatic aberration, each of which can fail to compile
- * independently. Without this, a tier nobody develops on can break and stay
- * broken until it reaches someone whose GPU happens to select it.
+ * Tiers mount genuinely different effect chains — the high tier adds god rays
+ * and chromatic aberration on top of everything below it, each of which can
+ * fail to compile independently. Without this, a tier nobody develops on can
+ * break and stay broken until it reaches someone whose GPU happens to select
+ * it.
+ *
+ * The sharpness assertion is here rather than in render.spec because the tier
+ * is exactly what decides it: the effects that can turn the frame to mush are
+ * the ones only the upper tiers mount, so the tier nobody develops on is again
+ * the one at risk.
  *
  * Slow under software rasterisation, so the generous timeout is deliberate.
  */
 
 const TIERS = ['low', 'medium', 'high'] as const
+
+/**
+ * How strong the sharpest edges in the centre crop must be, 0–255.
+ *
+ * Calibrated by measuring both conditions rather than by choosing a number that
+ * sounded right. With depth of field temporarily reinstated at its old
+ * settings, p99.5 read 35; without it, 152 / 147 / 148 across low / medium /
+ * high. 80 sits between: 2.3x above the blurred reading, 1.8x below the
+ * weakest sharp one.
+ *
+ * The first metric tried was the *fraction* of pixels carrying an edge, and it
+ * was useless — 0.176 blurred against 0.186 sharp. The grain pass runs after
+ * everything else, so a completely blurred frame still has an edge at nearly
+ * every pixel; they are simply all weak. Blur does not remove edges, it
+ * flattens them, so the statistic has to be about edge *strength*. That
+ * distinction is only visible if you measure the broken case, and a test
+ * written from the intuition alone would have shipped green with the bug live.
+ *
+ * This is a smoke alarm for "the whole frame went soft", not a fidelity score.
+ */
+const SHARPNESS_FLOOR = 80
 
 const BENIGN = [
   /Download the React DevTools/i,
@@ -68,5 +95,17 @@ for (const tier of TIERS) {
     // A shader that fails to compile logs an error and leaves its pass inert —
     // which is exactly the failure a screenshot alone would miss.
     expect(errors, `${tier} tier console errors:\n${errors.join('\n')}`).toEqual([])
+
+    // And the frame has to be legible, not merely present. Depth of field
+    // focused 4.6 units in front of the orb passed every other assertion in
+    // this file while rendering the avatar at ~93% circle of confusion; the
+    // only thing that noticed was a person looking at it.
+    const sharp = await sampleSharpness(page)
+    expect(
+      sharp.p995Step,
+      `${tier} tier frame has no fine detail — something is blurring the whole scene ` +
+        `(p99.5 ${sharp.p995Step.toFixed(1)}, edges ${sharp.edgeRatio.toFixed(4)}, ` +
+        `mean ${sharp.meanStep.toFixed(2)}, max ${sharp.maxStep.toFixed(0)})`,
+    ).toBeGreaterThan(SHARPNESS_FLOOR)
   })
 }

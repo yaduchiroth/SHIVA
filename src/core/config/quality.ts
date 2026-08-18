@@ -37,7 +37,6 @@ export interface QualitySettings {
   dpr: [number, number]
   bloom: boolean
   godRays: boolean
-  depthOfField: boolean
   chromaticAberration: boolean
   /** Transmission samples on glass panels — the single most expensive knob. */
   transmissionSamples: number
@@ -57,7 +56,6 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     // without it nothing glows and the whole aesthetic collapses.
     bloom: true,
     godRays: false,
-    depthOfField: false,
     chromaticAberration: false,
     transmissionSamples: 2,
     transmissionResolution: 128,
@@ -74,7 +72,6 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     dpr: [0.8, 1.5],
     bloom: true,
     godRays: false,
-    depthOfField: true,
     chromaticAberration: true,
     transmissionSamples: 4,
     transmissionResolution: 256,
@@ -95,7 +92,6 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     dpr: [1, 2],
     bloom: true,
     godRays: true,
-    depthOfField: true,
     chromaticAberration: true,
     transmissionSamples: 8,
     transmissionResolution: 512,

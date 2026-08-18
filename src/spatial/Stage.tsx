@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { AdaptiveDpr, Preload } from '@react-three/drei'
+import { Preload } from '@react-three/drei'
 import * as THREE from 'three'
 import { getQuality } from '@/core/config/quality'
 import { getDeviceProfile, isCaptureEnabled } from '@/lib/device'
@@ -87,10 +87,17 @@ export function Stage() {
         <Preload all />
       </Suspense>
 
+      {/* The only thing allowed to change render cost.
+          `AdaptiveDpr` used to sit beside it, halving the canvas resolution on
+          any regress and — with `pixelated={false}` — upscaling the result
+          smoothly, which is to say blurring the entire frame. Two systems
+          reacting to the same dropped frames, each seeing the other's
+          correction as more evidence, and the visible symptom was a screen
+          that went soft and stayed soft with no way to ask it why. The
+          governor measures real frame times over a longer horizon and makes
+          structural decisions that are legible in the HUD; that is the one
+          worth keeping. */}
       <PerformanceGovernor />
-      {/* Trims resolution during heavy frames; the governor handles the
-          structural quality decisions on a longer horizon. */}
-      <AdaptiveDpr pixelated={false} />
     </Canvas>
   )
 }

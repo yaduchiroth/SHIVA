@@ -102,6 +102,77 @@ export async function samplePaint(page: Page): Promise<PaintReport> {
   })
 }
 
+export interface SharpnessReport {
+  /** Mean absolute luminance step between neighbouring pixels, 0–255. */
+  meanStep: number
+  /** The largest such step found. */
+  maxStep: number
+  /** Fraction of samples with a step of 8 or more — real edges, not dither. */
+  edgeRatio: number
+  /** 99.5th percentile step: the strength of the sharpest edges that exist. */
+  p995Step: number
+}
+
+/**
+ * Measures how much fine detail actually survives to the screen.
+ *
+ * The bug this exists for: depth of field focused at 6.9 units while the orb
+ * sat at 11.5, which put the avatar at roughly 93% circle of confusion. Every
+ * test in the suite passed. The canvas painted, the colours were varied, no
+ * shader errors were logged — and the frame was mush. "Did it draw" and "can
+ * you read it" are different questions and the suite was only asking the first.
+ *
+ * Read at 1:1 from a centre crop, because scaling the canvas down through
+ * `drawImage` is itself a blur and would erase the very thing being measured.
+ * The centre is where the orb is, and the orb is the densest fine structure in
+ * the scene: single-pixel synapse lines against near-black.
+ */
+export async function sampleSharpness(page: Page, size = 220): Promise<SharpnessReport> {
+  return page.evaluate((crop) => {
+    const el = document.querySelector('canvas') as HTMLCanvasElement
+    const w = Math.min(crop, el.width)
+    const h = Math.min(crop, el.height)
+    const sx = Math.floor((el.width - w) / 2)
+    const sy = Math.floor((el.height - h) / 2)
+
+    const sample = document.createElement('canvas')
+    sample.width = w
+    sample.height = h
+    const ctx = sample.getContext('2d')!
+    ctx.drawImage(el, sx, sy, w, h, 0, 0, w, h)
+    const { data } = ctx.getImageData(0, 0, w, h)
+
+    const lum = new Float32Array(w * h)
+    for (let i = 0; i < lum.length; i++) {
+      const p = i * 4
+      lum[i] = 0.2126 * data[p]! + 0.7152 * data[p + 1]! + 0.0722 * data[p + 2]!
+    }
+
+    const steps: number[] = []
+    let total = 0
+    let max = 0
+    let edges = 0
+    for (let y = 0; y < h - 1; y++) {
+      for (let x = 0; x < w - 1; x++) {
+        const i = y * w + x
+        const step = Math.abs(lum[i + 1]! - lum[i]!) + Math.abs(lum[i + w]! - lum[i]!)
+        steps.push(step)
+        total += step
+        if (step > max) max = step
+        if (step >= 8) edges++
+      }
+    }
+
+    steps.sort((a, b) => a - b)
+    return {
+      meanStep: total / steps.length,
+      maxStep: max,
+      edgeRatio: edges / steps.length,
+      p995Step: steps[Math.floor(steps.length * 0.995)] ?? 0,
+    }
+  }, size)
+}
+
 export interface FrameReport {
   frames: number
   p50: number

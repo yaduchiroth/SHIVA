@@ -73,7 +73,14 @@
     background: var(--color-void);
     color: var(--color-mist);
     font-family: var(--font-mono);
-    -webkit-font-smoothing: antialiased;
+    /* Deliberately NOT `-webkit-font-smoothing: antialiased`.
+       It is copied into almost every stylesheet on the web as a synonym for
+       "crisper", and on macOS it is the opposite: it turns off subpixel
+       rendering and drops each glyph to greyscale coverage, which thins every
+       stem. Dark-on-light survives that. Light-on-dark — which is this entire
+       interface — does not: at 9 and 11px the stems fall below one pixel of
+       coverage and the type reads as soft and washed out. The default is
+       `auto`, so the fix is the absence of the line. */
     text-rendering: optimizeLegibility;
     /* Spatial input is gestural; native gestures (pinch-zoom, pull-to-refresh,
        text selection on drag) actively fight it. */
@@ -118,9 +125,19 @@
     font-size: var(--text-hud);
     letter-spacing: var(--tracking-hud);
     text-transform: uppercase;
-    color: var(--color-smoke);
-    /* Glass over a bright 3D scene needs its own contrast floor. */
-    text-shadow: 0 0 12px rgb(0 0 0 / 0.9);
+    /* Was `--color-smoke` (#7a7a88), about 4.4:1 on the void — under the floor
+       for 11px uppercase at this tracking. Mist clears 9:1 and still reads as
+       chrome rather than as content. */
+    color: var(--color-mist);
+    /* Text over a 3D scene needs its own contrast floor, but a 12px blur radius
+       around a 11px glyph is not that — the shadow is wider than the letter, so
+       it fills the counters and the gaps between stems with grey instead of
+       darkening the ground behind them. That is what "blurred" looked like on
+       the HUD. A 2px offset shadow plus a 4px halo darkens the ground and
+       leaves the letterforms alone. */
+    text-shadow:
+      0 1px 2px rgb(0 0 0 / 0.95),
+      0 0 4px rgb(0 0 0 / 0.7);
   }
 
   .hud-rule {
@@ -150,5 +167,10 @@
   font-size: var(--text-micro);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  color: var(--color-ash);
+  /* Was `--color-ash` (#4a4a55): 2.4:1 on the void, at 9px, tracked out to
+     0.24em. That is a label you can see is there and cannot read — and it is
+     the label on every button in the interface. Smoke is 4.6:1, which is the
+     honest floor for text this small, and still clearly subordinate to the
+     values it captions. */
+  color: var(--color-smoke);
 }

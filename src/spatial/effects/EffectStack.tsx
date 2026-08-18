@@ -4,7 +4,6 @@ import { useMemo } from 'react'
 import {
   Bloom,
   ChromaticAberration,
-  DepthOfField,
   EffectComposer,
   GodRays,
   Noise,
@@ -13,30 +12,27 @@ import {
 import { BlendFunction, KernelSize } from 'postprocessing'
 import * as THREE from 'three'
 import type { QualitySettings } from '@/core/config/quality'
-import { useSpatialStore } from '@/core/store/useSpatialStore'
 
 /**
  * The post chain.
  *
- * Order matters and is not arbitrary: depth of field runs before bloom so that
- * out-of-focus highlights bloom as the soft discs they've become rather than as
- * the sharp points they were. Grain goes last so it isn't itself blurred —
- * film grain that respects depth of field looks like a rendering artifact.
- *
  * Effects are unmounted rather than disabled on lower tiers; a disabled pass
  * still costs a full-screen copy through the composer.
- */
-
-/**
- * Where the front panel sits, as a fraction of the camera's near/far range.
  *
- * Both values are derived, not guessed: the ring radius and the camera's
- * resting/focused positions are the only inputs, and `far` is 120 (see Stage).
- *   rest    — camera 11.5, panel at radius 4.6      → 6.9 units
- *   focused — camera 10.3, panel at radius 4.6*1.08 → 5.3 units
+ * **There is deliberately no depth of field.** There was, focused on the front
+ * carousel panel at 6.9 units, and it was correct for the scene it was written
+ * for. Then the orb arrived at the origin — 11.5 units from the camera, 4.6
+ * behind the focus plane — and with a `focalLength` of 0.045 that put the
+ * avatar at roughly 93% circle of confusion. The single thing you most want to
+ * look at was rendered almost entirely blurred, and reported, accurately, as
+ * "everything appears blurred".
+ *
+ * It is gone rather than refocused, because refocusing only moves the problem.
+ * This is an instrument: every object in the room is something you might reach
+ * for, read, or drag to another monitor, and an effect whose entire purpose is
+ * to make most of the frame unreadable is working against that. Photographs
+ * have a subject. This does not.
  */
-const FOCUS_AT_REST = 6.9 / 120
-const FOCUS_WHEN_FOCUSED = 5.3 / 120
 
 interface Props {
   quality: QualitySettings
@@ -45,9 +41,6 @@ interface Props {
 }
 
 export function EffectStack({ quality, sun }: Props) {
-  const focused = useSpatialStore((s) => s.focused)
-  const focusDistance = focused !== null ? FOCUS_WHEN_FOCUSED : FOCUS_AT_REST
-
   // Effect constructors read these once, so a fresh Vector2 per render would
   // recreate the pass on every parent render.
   const aberrationOffset = useMemo(() => new THREE.Vector2(0.0004, 0.0006), [])
@@ -86,23 +79,6 @@ export function EffectStack({ quality, sun }: Props) {
         <></>
       )}
 
-      {quality.depthOfField ? (
-        <DepthOfField
-          // Tracks the subject rather than being a constant. Focus must land ON
-          // the front panel — miss it and the very text the panel exists to
-          // display goes soft — and the panel sits at a different distance when
-          // focused than at rest, so one fixed value cannot serve both states.
-          focusDistance={focusDistance}
-          focalLength={0.045}
-          // Enough separation to push the rear of the ring back without turning
-          // the neighbouring panels into unreadable smears.
-          bokehScale={2.2}
-          height={480}
-        />
-      ) : (
-        <></>
-      )}
-
       {quality.bloom ? (
         <Bloom
           // Tuned against how dark this scene actually is. At 1.0 nothing ever
@@ -130,8 +106,15 @@ export function EffectStack({ quality, sun }: Props) {
       {quality.chromaticAberration ? <ChromaticAberration offset={aberrationOffset} /> : <></>}
 
       {/* Grain ties the synthetic elements to a common noise floor — without it
-          the render reads as too clean to be photographic. */}
-      <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.28} />
+          the render reads as too clean to be photographic.
+
+          0.28 was too much. Grain is per-pixel noise, so it costs detail
+          wherever detail is finest: the orb's synapse lines are one to two
+          pixels wide and the panel type is barely more, and at that scale a
+          soft-light dither reads as softness rather than as texture. 0.09 is
+          still visible on the flat background — which is the only place it was
+          ever doing anything — without eating the thin work. */}
+      <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.09} />
 
       <Vignette eskil={false} offset={0.22} darkness={0.72} />
     </EffectComposer>

@@ -28,8 +28,15 @@ import { isLockForced } from '@/lib/device'
  *     interface.
  */
 
-/** How long before the way out appears, whatever the mind is doing. */
-export const ESCAPE_MS = 15_000
+/**
+ * How long before the way out appears, whatever the mind is doing.
+ *
+ * Was fifteen seconds, which was far too long. Fifteen seconds of an interface
+ * that appears to have hung is fifteen seconds of concluding it is broken — and
+ * this is a greeting on your own Mac, not a vault. Four is long enough for a
+ * camera to find you and short enough that nobody starts hunting for the bug.
+ */
+export const ESCAPE_MS = 4_000
 
 /** How long the greeting is held on screen before the interface arrives. */
 export const GREETING_MS = 1400
@@ -114,11 +121,34 @@ export function LockScreen() {
     return () => clearTimeout(timer)
   }, [stage, unlock])
 
+  // Any deliberate interaction opens it.
+  //
+  // Someone reaching for a control has answered the only question this screen
+  // asks — whether a person is there — more directly than a camera could. The
+  // alternative is a greeting that stands between you and your own interface
+  // while insisting on being greeted first, which is what it did.
+  useEffect(() => {
+    if (stage === 'open') return
+    const open = () => unlock()
+    window.addEventListener('pointerdown', open, { once: true, capture: true })
+    window.addEventListener('keydown', open, { once: true, capture: true })
+    return () => {
+      window.removeEventListener('pointerdown', open, true)
+      window.removeEventListener('keydown', open, true)
+    }
+  }, [stage, unlock])
+
   if (stage === 'open') return null
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-end gap-3 pb-28"
+      // `pointer-events-none` is the whole difference between a greeting and a
+      // modal. Without it this transparent sheet sits over the entire viewport
+      // at z-50 and swallows every click meant for the HUD, the console or the
+      // scene — so an interface that looked perfectly alive could not be
+      // touched until the escape button appeared. The button below re-enables
+      // events for itself, which is the rule the HUD already follows.
+      className="pointer-events-none fixed inset-0 z-50 flex flex-col items-center justify-end gap-3 pb-28"
       style={{
         // The orb stays visible behind it. Logging into something already alive
         // is the whole idea; a solid panel would hide the one thing worth
