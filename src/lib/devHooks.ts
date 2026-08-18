@@ -7,6 +7,7 @@ import { driveDomPointer, pointerBridgeState } from '@/spatial/hands/pointerBrid
 import { parseOdinEvent } from '@/adapters/odin/protocol'
 import { useOdinStore } from '@/core/store/useOdinStore'
 import { useBrainStore } from '@/core/store/useBrainStore'
+import { speechFallbackReason, speechProvider } from '@/brain/speech'
 import { handleOdinEvent } from '@/adapters/odin/useOdinLink'
 import type { GestureName } from '@/core/types'
 
@@ -73,6 +74,9 @@ export interface ShivaDevHooks {
     odin: string
     link: string
     companions: { slug: string; state: string }[]
+    /** Which voice last spoke, and why it was not the first choice. */
+    voice: string
+    voiceFallback: string | null
   }
 }
 
@@ -124,6 +128,8 @@ export function installDevHooks(): void {
         odin: odin.state,
         link: odin.link.status,
         companions: odin.companions.map((c) => ({ slug: c.slug, state: c.state })),
+        voice: speechProvider(),
+        voiceFallback: speechFallbackReason(),
       }
     },
     odin: (message) => {

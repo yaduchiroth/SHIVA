@@ -124,6 +124,27 @@ returns the camera to neutral.
 Both voice modes call the same tools and read the same live panels, so a spoken
 question and a typed one cannot answer with different facts.
 
+### The voice
+
+Replies are spoken by whichever of three providers is available, in order:
+
+1. **Deepgram Aura**, if `DEEPGRAM_API_KEY` is set. The most natural of the
+   three by a clear margin.
+2. **Gemini TTS**, using the key the brain already needs.
+3. The browser's own `speechSynthesis`, which always works and always sounds
+   like a machine.
+
+Selection happens on the server, where the credentials are, so the client never
+names a provider. The fall-through is not only for a missing key: if Deepgram
+refuses a request, Gemini answers it rather than the reply going unspoken.
+
+**A silently-failing key sounds exactly like a working one** — the reply is
+still spoken, just by the next provider down. So the route reports who answered:
+`window.__shiva.state().voice` with `?dev=1`, and a one-time console warning
+naming the vendor's own error. The most likely cause is the model name: Aura-2
+voices are `aura-2-<name>-en`, Aura-1 are `aura-<name>-en`, and the wrong prefix
+is a 400. Set `DEEPGRAM_TTS_MODEL`.
+
 ### Talking to SHIVA
 
 Four ways in, all equal:

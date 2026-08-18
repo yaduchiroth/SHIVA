@@ -102,6 +102,26 @@ let currentSource: AudioBufferSourceNode | null = null
 let audioContext: AudioContext | null = null
 
 /**
+ * Which voice actually spoke last, and why it was not the first choice.
+ *
+ * Worth tracking because the failure is invisible otherwise: a Deepgram key
+ * that is wrong, expired, or naming a model the account cannot use produces a
+ * reply that is still spoken — by Gemini — and sounds fine. Someone would
+ * reasonably conclude the good voice was working.
+ */
+export type SpeechProvider = 'deepgram' | 'gemini' | 'browser' | 'none'
+
+let lastProvider: SpeechProvider = 'none'
+let lastFallback: string | null = null
+/** Warned-about failures, so a broken key logs once rather than once per reply. */
+const warned = new Set<string>()
+
+export const speechProvider = (): SpeechProvider => lastProvider
+
+/** Why the preferred provider was not used, if it was not. Null when all is well. */
+export const speechFallbackReason = (): string | null => lastFallback
+
+/**
  * Speaks text using neural TTS, falling back to the browser.
  *
  * The browser's own voices are the reason an assistant sounds synthetic: flat
@@ -124,8 +144,23 @@ export async function speakNeural(text: string, voice?: string): Promise<boolean
     })
     if (!res.ok) return false
 
-    const { audio, sampleRate } = (await res.json()) as { audio: string; sampleRate: number }
+    const { audio, sampleRate, provider, fellBackFrom } = (await res.json()) as {
+      audio: string
+      sampleRate: number
+      provider?: SpeechProvider
+      fellBackFrom?: { error: string; detail: string }
+    }
     if (!audio) return false
+
+    lastProvider = provider ?? 'gemini'
+    lastFallback = fellBackFrom ? `${fellBackFrom.error}: ${fellBackFrom.detail}` : null
+    if (lastFallback && !warned.has(lastFallback)) {
+      warned.add(lastFallback)
+      // Once per distinct failure. A wrong key would otherwise print this on
+      // every single reply, which is how a useful warning becomes noise people
+      // filter out.
+      console.warn(`[speech] falling back to ${lastProvider}. ${lastFallback}`)
+    }
 
     // base64 → bytes → signed 16-bit samples → float. The model returns raw
     // PCM with no container, so decodeAudioData can't be used directly.
@@ -229,7 +264,9 @@ export function stopSpeaking(): void {
  */
 export async function say(text: string, voice?: string): Promise<void> {
   const spoken = await speakNeural(text, voice)
-  if (!spoken) speak(text)
+  if (spoken) return
+  lastProvider = 'browser'
+  speak(text)
 }
 
 export const isSynthesisSupported = (): boolean =>

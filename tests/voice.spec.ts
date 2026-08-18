@@ -87,3 +87,46 @@ test.describe('describeClose', () => {
     expect(describeClose(1011, '   ')).toContain('server error')
   })
 })
+
+/**
+ * Which voice speaks.
+ *
+ * The failure this guards against is specific and silent: a Deepgram key that
+ * is wrong, expired, or names a model the account cannot use produces a reply
+ * that is still spoken — by Gemini — and sounds perfectly fine. Someone would
+ * reasonably conclude the good voice was working. So the route reports which
+ * provider answered, and falling back is recorded rather than swallowed.
+ */
+test.describe('the speech route', () => {
+  test('says which provider spoke, or why none could', async ({ request }) => {
+    const res = await request.post('/api/speech', { data: { text: 'systems nominal' } })
+
+    if (res.status() === 501) {
+      // No credential at all, which is the case in CI. The message has to name
+      // the variables, because "TTS unavailable" sends nobody anywhere.
+      const body = (await res.json()) as { error: string }
+      expect(body.error).toMatch(/DEEPGRAM_API_KEY/)
+      expect(body.error).toMatch(/GEMINI_API_KEY/)
+      return
+    }
+
+    if (res.ok()) {
+      const body = (await res.json()) as { provider: string; audio: string; sampleRate: number }
+      expect(['deepgram', 'gemini']).toContain(body.provider)
+      expect(body.audio.length).toBeGreaterThan(0)
+      expect(body.sampleRate).toBeGreaterThan(8000)
+      return
+    }
+
+    // Both providers were tried and both refused. Every attempt is reported,
+    // with the vendor's own words — the sentence naming the fix is in there,
+    // and a summary loses it.
+    const body = (await res.json()) as { attempts?: { error: string; detail: string }[] }
+    expect(body.attempts?.length ?? 0).toBeGreaterThan(0)
+  })
+
+  test('an empty utterance is refused rather than synthesised', async ({ request }) => {
+    const res = await request.post('/api/speech', { data: { text: '   ' } })
+    expect([400, 501]).toContain(res.status())
+  })
+})
