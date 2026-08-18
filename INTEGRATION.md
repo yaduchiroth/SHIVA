@@ -1,5 +1,18 @@
 # SHIVA — complete build reference, written for extraction
 
+> **This document answered a question that has since been settled differently.**
+>
+> It was written to help lift SHIVA's input and presentation layer into an AI
+> you already had. That AI turned out to be Odin, and the merge went the other
+> way: Odin keeps its Python brain and tools, and SHIVA became its interface
+> over Odin's own WebSocket bus. Nothing was extracted. See **[ODIN.md](ODIN.md)**
+> for how the two now fit together.
+>
+> What follows is still accurate about SHIVA's internals, and still the right
+> document if you ever want to take the hand-tracking layer somewhere else.
+> The event bus it names as the seam is the same one the Odin link publishes
+> into, so the description of that seam holds exactly.
+
 Everything built so far, organised around one question: **what do you lift out of
 here to give an AI you already have a spatial interface and real hand gestures,
 and what do you leave behind?**

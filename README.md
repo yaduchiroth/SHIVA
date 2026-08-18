@@ -2,10 +2,15 @@
 
 A futuristic personal agentic AI — industrial spatial computing interface.
 
-> **Status: Phase 3 — live data.**
-> The spatial shell, the Gemini brain, and real data behind the panels. System
-> diagnostics and local weather are live with no credentials; weather drives the
-> 3D environment's rain, fog and light. Projects reads GitHub with a token.
+> **Status: Phase 4 — the avatar, the wall, and Odin.**
+> An orb of neurons and protons at the centre of the ring, reacting to gestures
+> and to whatever the brain is doing. Floating AR surfaces carrying real HTML —
+> reports, charts, embedded pages, live feeds — that hands can scroll and press.
+> And a link to **Odin**, which brings the Claude brain, the companions and the
+> whole Mac-bound toolset when you are at your desk. See **[ODIN.md](ODIN.md)**.
+>
+> Earlier phases still stand: the spatial shell, the Gemini brain, live system
+> diagnostics and weather with no credentials, GitHub projects with a token.
 > Schedule, Markets and Reach declare themselves unconnected rather than
 > inventing figures.
 
@@ -101,6 +106,13 @@ report the camera as unavailable.
 | Dismiss | Open palm                      | Escape               |
 | Zoom    | Pinch both hands, spread apart | `R` to reset         |
 | Wake    | Trace a circle with one finger | `/` to type          |
+
+**Screens are touchable.** Point at an AR surface and the hand drives real DOM
+underneath it — a report scrolls, a button presses. Pinch and hold to scroll,
+pinch and release to click. A drag that travels does not also click, the way a
+touchscreen behaves, so reading further down a report never activates anything.
+Note that CSS `:hover` cannot be triggered by a synthetic pointer at all, so
+hover styling keys off a `data-hand-hover` attribute instead.
 
 **One hand grabs an object; two hands grab the world.** Pinch with both hands
 and the space itself responds — move them together to turn the ring
@@ -234,12 +246,23 @@ be said about either.
 | `npm run doctor`           | Diagnose credentials and `.env` problems    |
 | `npm run build:standalone` | Self-hosted bundle — see `DEPLOY.md`        |
 
-### Quality override
+### URL flags
 
-`?quality=low`, `?quality=medium` or `?quality=high` pins the render tier and
-stops the runtime governor from moving it. Useful for checking how the interface
-degrades without hunting for a slower machine. Without it, the tier is chosen
-from device probing and adjusted at runtime from measured frame times.
+All opt-in, all off by default, so none of them costs anything in normal use.
+
+| Flag               | Effect                                                                        |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `?quality=low`     | Pins the render tier and stops the governor moving it. Also `medium`, `high`. |
+| `?surfaces=demo`   | Seeds one AR surface of every kind, with no brain involved.                   |
+| `?dev=1`           | Exposes `window.__shiva` — place a hand, inject an Odin event, read state.    |
+| `?odin=off`        | Suppresses the Odin connection attempt.                                       |
+| `?capture=1`       | Preserves the drawing buffer so the canvas can be screenshotted.              |
+| `?debug=hands`     | Live tracking inspector.                                                      |
+| `?sensitivity=low` | Widens the gesture dead zones. Also `normal`, `high`.                         |
+
+Pinning quality is the honest way to judge how the interface looks: "outdated"
+at `low` with the effect chain off and "outdated" at `high` with god rays are
+different verdicts about different pictures.
 
 ## Architecture
 
@@ -247,7 +270,10 @@ from device probing and adjusted at runtime from measured frame times.
 app/                    routes, telemetry API, global design tokens
 src/core/               store, config, typed event bus, hand frame buffer
 src/spatial/            R3F stage, environment, carousel, physics, effects
-src/spatial/hands/      MediaPipe loop, gesture recognizer, cursors
+src/spatial/hands/      MediaPipe loop, gesture recognizer, cursors, DOM bridge
+src/spatial/orb/        the avatar — shell, neurons, protons, glyphs, companions
+src/spatial/surfaces/   AR screens: layout, frame, and one renderer per kind
+src/adapters/odin/      Odin's bus protocol, client, and event handling
 src/spatial/brain/      holographic particle text
 src/hud/                boot sequence, HUD clusters, brain console, tracking inspector
 src/brain/              brain client, speech recognition and synthesis

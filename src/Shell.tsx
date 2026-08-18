@@ -14,6 +14,7 @@ import { HandDebugOverlay } from '@/hud/HandDebugOverlay'
 import { BrainConsole } from '@/hud/BrainConsole'
 import { seedDemoSurfaces } from '@/core/store/useSurfaceStore'
 import { installDevHooks, isDevHooksEnabled } from '@/lib/devHooks'
+import { useOdinLink } from '@/adapters/odin/useOdinLink'
 
 /**
  * Top-level composition.
@@ -37,6 +38,9 @@ export function Shell() {
   // stands down when input mode flips.
   usePointerFallback(true)
   useAudioEngine()
+  // Links to Odin when it is reachable; a no-op on a hosted page, where the
+  // browser will not open an insecure socket from a secure origin.
+  useOdinLink()
 
   useEffect(() => {
     setBoot('booting')

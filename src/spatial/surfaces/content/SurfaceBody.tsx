@@ -2,6 +2,8 @@
 
 import type { SurfaceContent } from '@/core/store/useSurfaceStore'
 import { Chart } from './Chart'
+import { Connectors } from './Connectors'
+import { Stream } from './Stream'
 import { Report } from './Report'
 import { WebFrame } from './WebFrame'
 
@@ -33,6 +35,10 @@ export function SurfaceBody({ content }: { content: SurfaceContent }) {
       )
     case 'web':
       return <WebFrame url={content.url} title={content.title} />
+    case 'stream':
+      return <Stream source={content.source} />
+    case 'connectors':
+      return <Connectors items={content.items} />
     default: {
       const exhaustive: never = content
       return exhaustive

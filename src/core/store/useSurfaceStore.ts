@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import type { StreamSource } from '@/adapters/odin/streams'
 
 /**
  * The screens floating around the room.
@@ -22,6 +23,14 @@ export interface ChartSeries {
   values: number[]
 }
 
+export interface ConnectorItem {
+  name: string
+  status?: string
+  detail?: string
+  /** Undefined means Odin did not say, which is not the same as offline. */
+  online?: boolean
+}
+
 export type SurfaceContent =
   /** A headline and some prose. The cheapest thing SHIVA can put in the room. */
   | { kind: 'card'; title: string; body: string }
@@ -37,6 +46,16 @@ export type SurfaceContent =
     }
   /** A live page by URL. Many sites refuse to be embedded; the surface says so. */
   | { kind: 'web'; title: string; url: string }
+  /**
+   * A live JPEG feed — Heimdall's camera, or a shared Mac screen.
+   *
+   * Carries no pixels. Frames arrive several times a second and live in
+   * `adapters/odin/streams`, outside React, because putting them here would
+   * re-render the entire wall on every frame to update one image.
+   */
+  | { kind: 'stream'; title: string; source: StreamSource }
+  /** What Odin is connected to, and what it is still missing. */
+  | { kind: 'connectors'; title: string; items: ConnectorItem[] }
 
 export type SurfaceKind = SurfaceContent['kind']
 

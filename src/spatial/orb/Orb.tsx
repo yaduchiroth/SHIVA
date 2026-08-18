@@ -8,6 +8,7 @@ import { useBrainStore } from '@/core/store/useBrainStore'
 import { on } from '@/core/events/bus'
 import { damp } from '@/lib/math'
 import type { Rgb } from './geometry'
+import { Companions } from './Companions'
 import { GlyphField } from './GlyphField'
 import { NeuralNet } from './NeuralNet'
 import { OrbCore } from './OrbCore'
@@ -150,6 +151,8 @@ export function Orb({ quality, reducedMotion }: Props) {
         seed={SEED + 3}
       />
       <OrbCore reducedMotion={reducedMotion} />
+      {/* Odin's roster, when it is linked. Renders nothing otherwise. */}
+      <Companions />
     </group>
   )
 }

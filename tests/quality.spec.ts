@@ -35,7 +35,11 @@ for (const tier of TIERS) {
     })
     page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`))
 
-    await page.goto(`/?quality=${tier}&capture=1`)
+    // `odin=off` for the same reason APP_URL carries it: a refused WebSocket
+    // logs a console error from Chromium's network stack, which no JavaScript
+    // can suppress, and this test asserts there are none. The link's behaviour
+    // without Odin is tested in odin.spec.ts.
+    await page.goto(`/?quality=${tier}&capture=1&odin=off`)
     await page.waitForSelector('[data-testid="os-ready"]', {
       state: 'attached',
       timeout: 120_000,

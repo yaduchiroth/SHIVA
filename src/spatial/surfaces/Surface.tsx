@@ -5,6 +5,7 @@ import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { PALETTE } from '@/core/config/palette'
+import { CAMERA_BASE } from '@/core/config/viewpoint'
 import { useSurfaceStore, type Surface as SurfaceModel } from '@/core/store/useSurfaceStore'
 import { damp } from '@/lib/math'
 import { emit } from '@/core/events/bus'
@@ -33,6 +34,9 @@ import { SurfaceBody } from './content/SurfaceBody'
 const FRAME = new THREE.Color(PALETTE['signal-dim'])
 const FRAME_FOCUS = new THREE.Color(PALETTE.signal)
 
+/** The eye, for pulling a focused surface toward it rather than toward the origin. */
+const CAMERA = new THREE.Vector3(CAMERA_BASE.x, CAMERA_BASE.y, CAMERA_BASE.z)
+
 interface Props {
   surface: SurfaceModel
   transform: SurfaceTransform
@@ -51,12 +55,25 @@ export function Surface({ surface, transform }: Props) {
   )
   useEffect(() => () => borderGeometry.dispose(), [borderGeometry])
 
-  // The target is recomputed from the transform every frame rather than being
-  // set once, so a surface arriving or leaving slides its neighbours into their
-  // new slots instead of teleporting them.
+  // The target is recomputed every frame rather than set once, so a surface
+  // arriving or leaving slides its neighbours into their new slots instead of
+  // teleporting them.
   const target = useMemo(() => new THREE.Vector3(), [])
   const euler = useMemo(() => new THREE.Euler(), [])
   const quat = useMemo(() => new THREE.Quaternion(), [])
+  /**
+   * The transform is owned by the frame loop, not by React.
+   *
+   * Passing `position` and `rotation` as JSX props would look equivalent and
+   * would silently defeat the damping: React reassigns them on every render,
+   * and a re-render is exactly what a layout change causes — so every slot
+   * change would snap into place and the interpolation below would only ever
+   * run against a target it had already been teleported to.
+   *
+   * The first frame still snaps, because a surface should appear where it
+   * belongs rather than flying in from the origin.
+   */
+  const placed = useRef(false)
 
   useFrame((_, dt) => {
     const g = group.current
@@ -67,10 +84,17 @@ export function Surface({ surface, transform }: Props) {
     euler.set(...transform.rotation)
     quat.setFromEuler(euler)
 
-    // Focus pulls the surface toward the viewer along its own outward normal,
-    // so it comes forward off the wall rather than sliding toward the centre of
-    // the room and through its neighbours.
-    if (focused) target.multiplyScalar(1.18)
+    // Focus pulls the surface toward the viewer along its own line of sight,
+    // so it comes forward off the wall rather than sliding toward the middle
+    // of the room and through its neighbours.
+    if (focused) target.lerp(CAMERA, 0.18)
+
+    if (!placed.current) {
+      placed.current = true
+      g.position.copy(target)
+      g.quaternion.copy(quat)
+      return
+    }
 
     g.position.x = damp(g.position.x, target.x, 6, step)
     g.position.y = damp(g.position.y, target.y, 6, step)
@@ -85,7 +109,7 @@ export function Surface({ surface, transform }: Props) {
   })
 
   return (
-    <group ref={group} position={transform.position} rotation={transform.rotation}>
+    <group ref={group}>
       {/* Backing. Not transparent-black but a dark tint, so the volumetric
           environment behind still reads through and the surface belongs to the
           room rather than being a hole cut in it. */}

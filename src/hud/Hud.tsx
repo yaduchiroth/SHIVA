@@ -6,6 +6,8 @@ import { useSystemStore } from '@/core/store/useSystemStore'
 import { useGestureStore } from '@/core/store/useGestureStore'
 import { useSpatialStore, activeModuleIndex } from '@/core/store/useSpatialStore'
 import type { TrackingStatus } from '@/core/types'
+import { useOdinStore } from '@/core/store/useOdinStore'
+import type { LinkStatus } from '@/adapters/odin/client'
 
 /**
  * The heads-up display.
@@ -60,7 +62,33 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
   )
 }
 
+/**
+ * What the link row says, per status.
+ *
+ * "Blocked" is its own word rather than an error because it is not one: a
+ * secure page cannot open an insecure socket, Odin may be running perfectly,
+ * and calling it offline would send someone to restart a healthy process.
+ */
+const ODIN_COPY: Record<LinkStatus['status'], string> = {
+  off: 'Off',
+  connecting: 'Linking…',
+  live: 'Linked',
+  unreachable: 'Not running',
+  blocked: 'Blocked (HTTPS)',
+}
+
+const ODIN_TONE: Record<LinkStatus['status'], string | undefined> = {
+  off: undefined,
+  connecting: 'var(--color-caution)',
+  live: 'var(--color-nominal)',
+  unreachable: 'var(--color-smoke)',
+  blocked: 'var(--color-caution)',
+}
+
 export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
+  const odinLink = useOdinStore((s) => s.link)
+  const companionCount = useOdinStore((s) => s.companions.length)
+  const working = useOdinStore((s) => s.companions.filter((c) => c.state === 'working').length)
   const clock = useClock()
   const fps = useSystemStore((s) => s.fps)
   const frameMs = useSystemStore((s) => s.frameMs)
@@ -114,6 +142,19 @@ export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
           value={active.code}
           tone={focused !== null ? 'var(--color-signal)' : undefined}
         />
+        {/* Only shown once the link has been attempted. On a hosted page it
+            never is, and a permanent "ODIN — OFF" would read as a fault rather
+            than as a deployment that was never meant to reach a laptop. */}
+        {odinLink.status !== 'off' ? (
+          <Row label="Odin" value={ODIN_COPY[odinLink.status]} tone={ODIN_TONE[odinLink.status]} />
+        ) : null}
+        {companionCount > 0 ? (
+          <Row
+            label="Council"
+            value={working > 0 ? `${companionCount} · ${working} out` : String(companionCount)}
+            tone={working > 0 ? 'var(--color-caution)' : undefined}
+          />
+        ) : null}
       </div>
 
       {/* ── Clock + conditions, top-right ────────────────────────────────── */}
