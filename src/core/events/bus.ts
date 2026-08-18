@@ -35,6 +35,14 @@ export interface EventMap {
   'world:spin': { delta: number }
   /** Camera dolly, as a multiplier on distance. Below 1 moves closer. */
   'world:zoom': { factor: number }
+  /** A floating surface picked up, by hand or by pointer. */
+  'surface:grab': { id: string }
+  'surface:release': { id: string }
+  /** Resized by the two-handed spread. A multiplier, like `world:zoom`. */
+  'surface:scale': { id: string; factor: number }
+  /** Thrown to the extended display, and back. */
+  'surface:sent': { id: string }
+  'surface:returned': { id: string }
   /** Any UI affordance that wants a confirmation blip. */
   'ui:confirm': { intensity: number }
   'tracking:acquired': { hands: number }

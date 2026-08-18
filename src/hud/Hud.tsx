@@ -8,6 +8,8 @@ import { useSpatialStore, activeModuleIndex } from '@/core/store/useSpatialStore
 import type { TrackingStatus } from '@/core/types'
 import { useOdinStore } from '@/core/store/useOdinStore'
 import type { LinkStatus } from '@/adapters/odin/client'
+import type { Screens } from '@/spatial/surfaces/useScreens'
+import { useSurfaceStore } from '@/core/store/useSurfaceStore'
 
 /**
  * The heads-up display.
@@ -85,7 +87,15 @@ const ODIN_TONE: Record<LinkStatus['status'], string | undefined> = {
   blocked: 'var(--color-caution)',
 }
 
-export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
+export function Hud({
+  onEnableTracking,
+  screens,
+}: {
+  onEnableTracking: () => void
+  screens: Screens
+}) {
+  const [displayNote, setDisplayNote] = useState<string | null>(null)
+  const surfaceFocused = useSurfaceStore((s) => s.focused !== null)
   const odinLink = useOdinStore((s) => s.link)
   const companionCount = useOdinStore((s) => s.companions.length)
   const working = useOdinStore((s) => s.companions.filter((c) => c.state === 'working').length)
@@ -137,6 +147,14 @@ export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
           }
         />
         <Row label="Input" value={inputMode === 'hand' ? 'Hand' : 'Pointer'} />
+        {/* Two hands do one of two things and the difference is invisible
+            otherwise: with a surface focused they resize it, without one they
+            dolly the camera. Stated rather than left to be discovered. */}
+        <Row
+          label="Two hands"
+          value={surfaceFocused ? 'Resize surface' : 'Zoom world'}
+          tone={surfaceFocused ? 'var(--color-signal)' : undefined}
+        />
         <Row
           label="Module"
           value={active.code}
@@ -219,6 +237,38 @@ export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
             <Row label="L / R" value={`${leftGesture} / ${rightGesture}`} />
           </>
         )}
+        {/* Only offered when a second display actually exists. `screen.isExtended`
+            answers that with no permission prompt at all, so a button that would
+            do nothing never appears. */}
+        {screens.extended && (
+          <button
+            type="button"
+            onClick={() => {
+              void screens.open().then((result) => {
+                setDisplayNote(
+                  result.placed === 'auto'
+                    ? `Opened on ${result.label}.`
+                    : result.placed === 'manual'
+                      ? 'Opened — drag it to your other display once.'
+                      : result.reason,
+                )
+              })
+            }}
+            className="glass-surface mt-2 cursor-pointer px-3 py-1.5 transition-colors"
+            style={{ pointerEvents: 'auto', color: 'var(--color-mist)' }}
+            data-testid="open-display"
+          >
+            <span className="text-hud-label">
+              {screens.connected ? 'Display 2 · linked' : 'Open display 2'}
+            </span>
+          </button>
+        )}
+        {displayNote && (
+          <p className="mt-1 max-w-full text-right text-[10px] text-[var(--color-smoke)]">
+            {displayNote}
+          </p>
+        )}
+
         {canEnable && (
           <button
             type="button"

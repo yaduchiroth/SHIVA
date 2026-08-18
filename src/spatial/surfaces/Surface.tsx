@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { Html } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { PALETTE } from '@/core/config/palette'
 import { CAMERA_BASE } from '@/core/config/viewpoint'
@@ -11,7 +11,9 @@ import { damp } from '@/lib/math'
 import { emit } from '@/core/events/bus'
 import { SURFACE_H, SURFACE_PX, SURFACE_SCALE, SURFACE_W, type SurfaceTransform } from './layout'
 import { SurfaceBody } from './content/SurfaceBody'
-import { EASE, MAX_STEP, SETTLE } from '@/core/config/motion'
+import { EASE, MAX_STEP, SETTLE, SNAP } from '@/core/config/motion'
+import { WALL } from './layout'
+import { dragState } from './useSurfaceDrag'
 
 /**
  * One screen in the room: a WebGL frame with live DOM inside it.
@@ -37,6 +39,7 @@ const FRAME_FOCUS = new THREE.Color(PALETTE.signal)
 
 /** The eye, for pulling a focused surface toward it rather than toward the origin. */
 const CAMERA = new THREE.Vector3(CAMERA_BASE.x, CAMERA_BASE.y, CAMERA_BASE.z)
+const UP = new THREE.Vector3(0, 1, 0)
 
 interface Props {
   surface: SurfaceModel
@@ -48,8 +51,11 @@ export function Surface({ surface, transform }: Props) {
   const border = useRef<THREE.LineSegments>(null)
   const plane = useRef<THREE.Mesh>(null)
   const focused = useSurfaceStore((s) => s.focused === surface.id)
+  const grabbed = useSurfaceStore((s) => s.grabbed === surface.id)
   const focus = useSurfaceStore((s) => s.focus)
   const remove = useSurfaceStore((s) => s.remove)
+  const setGrabbed = useSurfaceStore((s) => s.setGrabbed)
+  const camera = useThree((s) => s.camera)
 
   const borderGeometry = useMemo(
     () => new THREE.EdgesGeometry(new THREE.PlaneGeometry(SURFACE_W, SURFACE_H)),
@@ -63,6 +69,8 @@ export function Surface({ surface, transform }: Props) {
   const target = useMemo(() => new THREE.Vector3(), [])
   const euler = useMemo(() => new THREE.Euler(), [])
   const quat = useMemo(() => new THREE.Quaternion(), [])
+  const ray = useMemo(() => new THREE.Vector3(), [])
+  const matrix = useMemo(() => new THREE.Matrix4(), [])
   /**
    * The transform is owned by the frame loop, not by React.
    *
@@ -92,14 +100,28 @@ export function Surface({ surface, transform }: Props) {
     if (!g) return
     const step = Math.min(dt, MAX_STEP)
 
-    target.set(...transform.position)
-    euler.set(...transform.rotation)
-    quat.setFromEuler(euler)
+    if (grabbed) {
+      // Held: the surface sits on the ray through the pointer, at the wall's
+      // own distance. Following the ray rather than sliding along the wall is
+      // what makes it feel picked up — it tracks the hand exactly, including
+      // when the hand moves toward the edge of the frame where a flat mapping
+      // would lag behind.
+      const { x, y } = dragState()
+      ray.set(x * 2 - 1, 1 - y * 2, 0.5).unproject(camera)
+      ray.sub(camera.position).normalize().multiplyScalar(WALL.distance)
+      target.copy(camera.position).add(ray)
+      // Squared up to the viewer while held, so it reads as lifted off the wall.
+      quat.setFromRotationMatrix(matrix.lookAt(camera.position, target, UP))
+    } else {
+      target.set(...transform.position)
+      euler.set(...transform.rotation)
+      quat.setFromEuler(euler)
+    }
 
     // Focus pulls the surface toward the viewer along its own line of sight,
     // so it comes forward off the wall rather than sliding toward the middle
     // of the room and through its neighbours.
-    if (focused) target.lerp(CAMERA, 0.18)
+    if (focused && !grabbed) target.lerp(CAMERA, 0.18)
 
     if (!placed.current) {
       placed.current = true
@@ -107,10 +129,13 @@ export function Surface({ surface, transform }: Props) {
       g.quaternion.copy(quat)
     }
 
-    g.position.x = damp(g.position.x, target.x, SETTLE, step)
-    g.position.y = damp(g.position.y, target.y, SETTLE, step)
-    g.position.z = damp(g.position.z, target.z, SETTLE, step)
-    g.quaternion.slerp(quat, 1 - Math.exp(-SETTLE * step))
+    // A held surface tracks faster than a settling one: anything you are
+    // physically moving has to feel attached, and SETTLE reads as drag.
+    const rate = grabbed ? SNAP : SETTLE
+    g.position.x = damp(g.position.x, target.x, rate, step)
+    g.position.y = damp(g.position.y, target.y, rate, step)
+    g.position.z = damp(g.position.z, target.z, rate, step)
+    g.quaternion.slerp(quat, 1 - Math.exp(-rate * step))
 
     // Arrive and leave, rather than appear and vanish. A surface that pops out
     // of existence mid-frame takes its neighbours' layout with it in the same
@@ -119,7 +144,7 @@ export function Surface({ surface, transform }: Props) {
     const eased = appear.current
     // Scale from 0.86 rather than 0: growing from nothing reads as a zoom
     // effect, while a small step up reads as something settling into place.
-    g.scale.setScalar(0.86 + 0.14 * eased)
+    g.scale.setScalar((0.86 + 0.14 * eased) * (surface.scale ?? 1))
     if (body.current) body.current.style.opacity = String(eased)
 
     const mat = border.current?.material as THREE.LineBasicMaterial | undefined
@@ -166,7 +191,20 @@ export function Surface({ surface, transform }: Props) {
           data-surface-id={surface.id}
           data-surface-kind={surface.content.kind}
         >
-          <header className="flex shrink-0 items-center gap-2 border-b border-[var(--color-steel)] px-3 py-2">
+          {/* The header is the drag handle. A surface whose whole face is one
+              cannot hold a scrollable report or a working button, and a
+              modifier key is not something a hand can press. */}
+          <header
+            className="flex shrink-0 cursor-grab items-center gap-2 border-b border-[var(--color-steel)] px-3 py-2 active:cursor-grabbing"
+            data-testid="surface-handle"
+            onPointerDown={(e) => {
+              // Not on the buttons: Focus and Close live in this bar, and a
+              // press on either must not also pick the surface up.
+              if ((e.target as HTMLElement).closest('button')) return
+              setGrabbed(surface.id)
+              emit('surface:grab', { id: surface.id })
+            }}
+          >
             <span className="truncate text-[10px] tracking-[0.22em] text-[var(--color-signal-dim)] uppercase">
               {surface.content.title || surface.content.kind}
             </span>

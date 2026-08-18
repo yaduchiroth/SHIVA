@@ -74,6 +74,8 @@ export interface Surface {
    * racing it.
    */
   removing?: boolean
+  /** Size multiplier from the two-handed pinch. 1 when never scaled. */
+  scale?: number
 }
 
 /**
@@ -100,6 +102,8 @@ interface SurfaceState {
   surfaces: Surface[]
   /** The surface pulled forward for reading, or null. */
   focused: string | null
+  /** The surface currently held by a hand or the pointer, or null. */
+  grabbed: string | null
 
   /**
    * Adds a surface, or replaces one with the same id.
@@ -112,14 +116,29 @@ interface SurfaceState {
   remove: (id: string) => void
   clear: () => void
   focus: (id: string | null) => void
+  setGrabbed: (id: string | null) => void
+  /**
+   * Multiplies a surface's size. Clamped, because both ends stop being useful:
+   * below half the type is unreadable, above two and a half a single surface
+   * hides the ones beside it.
+   */
+  scale: (id: string, factor: number) => void
+  /** Takes a surface out of this window's wall, whole, to hand to the other one. */
+  detach: (id: string) => Surface | null
+  /** Puts a surface arriving from the other window onto this wall. */
+  attach: (surface: Surface) => void
 }
 
 let counter = 0
 const nextId = (): string => `surface-${++counter}`
 
-export const useSurfaceStore = create<SurfaceState>((set) => ({
+export const MIN_SCALE = 0.5
+export const MAX_SCALE = 2.5
+
+export const useSurfaceStore = create<SurfaceState>((set, get) => ({
   surfaces: [],
   focused: null,
+  grabbed: null,
 
   push: (content, id) => {
     const key = id ?? nextId()
@@ -145,7 +164,7 @@ export const useSurfaceStore = create<SurfaceState>((set) => ({
   },
 
   remove: (id) => {
-    const existing = useSurfaceStore.getState().surfaces.find((v) => v.id === id)
+    const existing = get().surfaces.find((v) => v.id === id)
     // Already leaving: a second close must not schedule a second drop, or the
     // timer fires after the id has been reused and takes the new surface with it.
     if (!existing || existing.removing) return
@@ -164,16 +183,47 @@ export const useSurfaceStore = create<SurfaceState>((set) => ({
   },
 
   clear: () => {
-    const ids = useSurfaceStore.getState().surfaces.map((v) => v.id)
-    for (const id of ids) useSurfaceStore.getState().remove(id)
+    const ids = get().surfaces.map((v) => v.id)
+    for (const id of ids) get().remove(id)
   },
+
   focus: (focused) => set({ focused }),
+  setGrabbed: (grabbed) => set({ grabbed }),
+
+  scale: (id, factor) =>
+    set((s) => ({
+      surfaces: s.surfaces.map((v) =>
+        v.id === id
+          ? { ...v, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, (v.scale ?? 1) * factor)) }
+          : v,
+      ),
+    })),
+
+  detach: (id) => {
+    const surface = get().surfaces.find((v) => v.id === id)
+    if (!surface) return null
+    // Removed outright rather than marked `removing`: it is not going away, it
+    // is going somewhere else, and a fade here would race the arrival there.
+    set((s) => ({
+      surfaces: s.surfaces.filter((v) => v.id !== id),
+      focused: s.focused === id ? null : s.focused,
+      grabbed: s.grabbed === id ? null : s.grabbed,
+    }))
+    return { ...surface, removing: false }
+  },
+
+  attach: (surface) =>
+    set((s) => ({
+      // Filtered first, so a surface sent across and back does not arrive
+      // alongside a stale copy of itself.
+      surfaces: [...s.surfaces.filter((v) => v.id !== surface.id), surface].slice(-MAX_SURFACES),
+    })),
 }))
 
 /** Resets the id counter too, so tests do not depend on execution order. */
 export function resetSurfaces(): void {
   counter = 0
-  useSurfaceStore.setState({ surfaces: [], focused: null })
+  useSurfaceStore.setState({ surfaces: [], focused: null, grabbed: null })
 }
 
 /**

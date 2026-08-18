@@ -15,6 +15,8 @@ import { BrainConsole } from '@/hud/BrainConsole'
 import { seedDemoSurfaces } from '@/core/store/useSurfaceStore'
 import { installDevHooks, isDevHooksEnabled } from '@/lib/devHooks'
 import { useOdinLink } from '@/adapters/odin/useOdinLink'
+import { useScreens } from '@/spatial/surfaces/useScreens'
+import { DockEdge } from '@/spatial/surfaces/DockEdge'
 
 /**
  * Top-level composition.
@@ -41,6 +43,9 @@ export function Shell() {
   // Links to Odin when it is reachable; a no-op on a hosted page, where the
   // browser will not open an insecure socket from a secure origin.
   useOdinLink()
+  // Owns the link to the display window, and lets a grabbed surface be thrown
+  // at it. A no-op when there is no second display and nothing is grabbed.
+  const screens = useScreens()
 
   useEffect(() => {
     setBoot('booting')
@@ -68,8 +73,9 @@ export function Shell() {
   return (
     <main className="relative h-full w-full">
       <Stage />
-      <Hud onEnableTracking={startTracking} />
+      <Hud onEnableTracking={startTracking} screens={screens} />
       {handDebug && <HandDebugOverlay />}
+      <DockEdge connected={screens.connected} />
       <BrainConsole />
       <BootSequence onComplete={handleBootComplete} />
       {/* Test anchor: marks the point at which the OS is interactive. */}

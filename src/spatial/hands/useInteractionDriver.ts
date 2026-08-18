@@ -6,6 +6,7 @@ import { useSpatialStore } from '@/core/store/useSpatialStore'
 import { useGestureStore } from '@/core/store/useGestureStore'
 import { getPrimaryHand } from '@/core/hands/handFrame'
 import { activeModuleIndex } from '@/core/store/useSpatialStore'
+import { useSurfaceStore } from '@/core/store/useSurfaceStore'
 
 /**
  * Interaction policy.
@@ -65,6 +66,18 @@ export function useInteractionDriver() {
     })
 
     const offZoom = on('world:zoom', ({ factor }) => {
+      // With a surface focused, two hands resize IT rather than dollying the
+      // camera. That reads as the existing rule rather than an exception to it
+      // — one hand grabs an object, two hands grab the world, and a surface you
+      // have deliberately pulled forward IS your world for as long as it is
+      // there. The HUD says which of the two modes is live, so it is never a
+      // guess.
+      const surface = useSurfaceStore.getState()
+      if (surface.focused !== null) {
+        surface.scale(surface.focused, factor)
+        emit('surface:scale', { id: surface.focused, factor })
+        return
+      }
       useSpatialStore.getState().adjustDolly(factor)
     })
 

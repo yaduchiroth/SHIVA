@@ -124,6 +124,28 @@ returns the camera to neutral.
 Both voice modes call the same tools and read the same live panels, so a spoken
 question and a typed one cannot answer with different facts.
 
+### Second display
+
+If a second monitor is attached, the HUD offers **Open display 2**. Grab a
+surface by its title bar, drag it past the right-hand edge — the edge lights up
+— and let go. It lands on the other screen at full size and stays there. Send it
+back from the button in its header.
+
+`screen.isExtended` answers "is there another display" with no permission prompt
+at all, so the button only appears when it would do something. Placing the window
+on that display needs the Window Management API, which is **Chrome and Edge
+only** — in Safari or Firefox the window still opens, you drag it across once,
+and everything after that works identically.
+
+The two windows talk over a `BroadcastChannel`, so either can be reloaded or
+closed without the other noticing. Live camera feeds are the one thing that does
+not travel that way — the display window opens its own connection to the mind,
+subscribed to frames alone.
+
+**Pinch to resize.** With a surface focused, the two-handed spread scales _it_
+instead of dollying the camera. The HUD's TWO HANDS row says which of the two is
+live.
+
 ### The voice
 
 Replies are spoken by whichever of three providers is available, in order:
