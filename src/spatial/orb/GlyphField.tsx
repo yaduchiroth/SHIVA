@@ -7,6 +7,7 @@ import type { OrbBudget } from '@/core/config/quality'
 import { buildGlyphs } from './geometry'
 import { buildGlyphAtlas, CELL_H, CELL_W } from './glyphAtlas'
 import { orbDrive } from './orbDrive'
+import { HAND_GLSL, handUniforms, syncHandUniforms } from './shaders'
 
 /**
  * Drifting machine chatter, as one instanced quad reading one atlas.
@@ -36,16 +37,19 @@ uniform vec2 uAtlasGrid;    // columns, rows
 uniform float uAspect;      // cell width / height
 varying vec2 vUv;
 varying float vAlpha;
+${HAND_GLSL}
 
 void main() {
   float phi = aOrbit.x;
   float radius = aOrbit.y;
   float theta = aOrbit.z + uTime * aSpeed;
 
-  vec3 centre = vec3(
-    radius * sin(phi) * cos(theta),
-    radius * cos(phi),
-    radius * sin(phi) * sin(theta)
+  vec3 centre = displaceByHands(
+    vec3(
+      radius * sin(phi) * cos(theta),
+      radius * cos(phi),
+      radius * sin(phi) * sin(theta)
+    ) * apertureScale()
   );
 
   // Billboard: offset in VIEW space so the quad always squarely faces the
@@ -147,6 +151,9 @@ export function GlyphField({ budget, innerRadius, outerRadius, seed }: Props) {
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
+      // 0.8: between the neural shell and the protons, so a spread fans the
+      // glyphs out through the gap the two open up.
+      ...handUniforms(0.8),
       uAtlas: { value: null as THREE.Texture | null },
       uAtlasGrid: { value: new THREE.Vector2(1, 1) },
       uAspect: { value: CELL_W / CELL_H },
@@ -163,6 +170,7 @@ export function GlyphField({ budget, innerRadius, outerRadius, seed }: Props) {
   }, [atlas, texture, uniforms])
 
   useFrame(() => {
+    syncHandUniforms(uniforms)
     uniforms.uTime.value = orbDrive.time
     uniforms.uEnergy.value = orbDrive.energy
     uniforms.uAccent.value.setRGB(orbDrive.accent[0]!, orbDrive.accent[1]!, orbDrive.accent[2]!)

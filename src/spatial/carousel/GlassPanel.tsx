@@ -12,6 +12,7 @@ import { emit } from '@/core/events/bus'
 import { resolveColor } from '@/core/config/palette'
 import { createPanelTexture, drawPanel } from './panelTexture'
 import { readPanel } from './panelContent'
+import { SETTLE } from '@/core/config/motion'
 
 /**
  * A single glass panel.
@@ -236,10 +237,10 @@ export function GlassPanel({
     // its content more opaque, so attention has an obvious home.
     const prominence = held || focused ? 1 : target.prominence
     if (content.current) {
-      content.current.opacity = damp(content.current.opacity, 0.25 + prominence * 0.75, 6, dt)
+      content.current.opacity = damp(content.current.opacity, 0.25 + prominence * 0.75, SETTLE, dt)
     }
     if (edge.current) {
-      edge.current.opacity = damp(edge.current.opacity, 0.1 + prominence * 0.5, 6, dt)
+      edge.current.opacity = damp(edge.current.opacity, 0.1 + prominence * 0.5, SETTLE, dt)
     }
   })
 

@@ -7,6 +7,9 @@ import { PALETTE } from '@/core/config/palette'
 import { useBrainStore } from '@/core/store/useBrainStore'
 import { on } from '@/core/events/bus'
 import { damp } from '@/lib/math'
+import { DRIFT, MAX_STEP, SETTLE } from '@/core/config/motion'
+import { getHand } from '@/core/hands/handFrame'
+import { driveOrbFromHands, type HandSample } from './handDrive'
 import type { Rgb } from './geometry'
 import { Companions } from './Companions'
 import { GlyphField } from './GlyphField'
@@ -43,6 +46,20 @@ const SEED = 0x5417a
 interface Props {
   quality: QualitySettings
   reducedMotion: boolean
+}
+
+/** The tracking singleton, in the shape the driver wants. */
+function sampleHand(handedness: 'left' | 'right'): HandSample {
+  const hand = getHand(handedness)
+  return {
+    visible: hand.visible,
+    x: hand.position.x,
+    y: hand.position.y,
+    z: hand.position.z,
+    openness: hand.openness,
+    grab: hand.grab,
+    vx: hand.velocity.x,
+  }
 }
 
 export function Orb({ quality, reducedMotion }: Props) {
@@ -105,17 +122,25 @@ export function Orb({ quality, reducedMotion }: Props) {
     // Clamped for the same reason the shell's rotation is: a backgrounded tab
     // resumes with one enormous delta, and an unclamped `damp` over it snaps
     // every value straight to target, which looks like a glitch on return.
-    const step = Math.min(dt, 0.05)
+    const step = Math.min(dt, MAX_STEP)
     orbDrive.time += reducedMotion ? step * 0.25 : step
+
+    // The continuous channel. Read straight from the tracking singleton rather
+    // than a store, because this changes sixty times a second and a store write
+    // would re-render the React tree every time a hand moved.
+    driveOrbFromHands(
+      reducedMotion ? [null, null] : [sampleHand('left'), sampleHand('right')],
+      step,
+    )
 
     const target = PHASE_DRIVE[orbDrive.phase] ?? PHASE_DRIVE.idle
     // Colour damps faster than energy: a state change should be legible
     // immediately, while the liveliness behind it settles in over a second or
     // so. Equal rates make the whole thing feel like one slow switch.
     for (let i = 0; i < 3; i++) {
-      orbDrive.accent[i] = damp(orbDrive.accent[i]!, target[i]!, 4.5, step)
+      orbDrive.accent[i] = damp(orbDrive.accent[i]!, target[i]!, SETTLE, step)
     }
-    orbDrive.energy = damp(orbDrive.energy, target[3]!, 2.2, step)
+    orbDrive.energy = damp(orbDrive.energy, target[3]!, DRIFT, step)
   })
 
   return (

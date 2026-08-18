@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { handFrame } from '@/core/hands/handFrame'
 import { useGestureStore } from '@/core/store/useGestureStore'
 import { damp } from '@/lib/math'
+import { INSTANT, SNAP } from '@/core/config/motion'
 import { handToWorld } from './projection'
 
 /**
@@ -75,7 +76,7 @@ function Cursor({ handedness, color }: CursorProps) {
     // Fade the whole cursor out rather than hiding it: a cursor that blinks out
     // of existence on a dropped frame reads as a glitch.
     const targetScale = hand.visible ? 1 : 0
-    g.scale.setScalar(damp(g.scale.x, targetScale, 12, dt))
+    g.scale.setScalar(damp(g.scale.x, targetScale, SNAP, dt))
     if (g.scale.x < 0.01) {
       g.visible = false
       return
@@ -87,9 +88,9 @@ function Cursor({ handedness, color }: CursorProps) {
       // Light smoothing on top of the One Euro filter: the filter tames sensor
       // jitter, this absorbs the discrete jumps between inference frames, which
       // arrive slower than the render loop.
-      g.position.x = damp(g.position.x, target.x, 22, dt)
-      g.position.y = damp(g.position.y, target.y, 22, dt)
-      g.position.z = damp(g.position.z, target.z, 22, dt)
+      g.position.x = damp(g.position.x, target.x, INSTANT, dt)
+      g.position.y = damp(g.position.y, target.y, INSTANT, dt)
+      g.position.z = damp(g.position.z, target.z, INSTANT, dt)
     }
 
     // Pinch closes the ring and brightens the core — visible *before* the
@@ -97,19 +98,19 @@ function Cursor({ handedness, color }: CursorProps) {
     const pinch = hand.pinch
     if (ring.current) {
       const s = 1 - pinch * 0.55
-      ring.current.scale.setScalar(damp(ring.current.scale.x, s, 18, dt))
+      ring.current.scale.setScalar(damp(ring.current.scale.x, s, INSTANT, dt))
       ring.current.rotation.z += dt * (0.4 + pinch * 3)
     }
     if (coreMat.current) {
-      coreMat.current.opacity = damp(coreMat.current.opacity, 0.5 + pinch * 0.5, 14, dt)
+      coreMat.current.opacity = damp(coreMat.current.opacity, 0.5 + pinch * 0.5, SNAP, dt)
     }
     if (ringMat.current) {
       const active = hand.gesture !== 'idle'
-      ringMat.current.opacity = damp(ringMat.current.opacity, active ? 0.9 : 0.35, 14, dt)
+      ringMat.current.opacity = damp(ringMat.current.opacity, active ? 0.9 : 0.35, SNAP, dt)
     }
     if (core.current) {
       const s = 1 + pinch * 0.6 + (hand.gesture === 'grab' ? 0.4 : 0)
-      core.current.scale.setScalar(damp(core.current.scale.x, s, 16, dt))
+      core.current.scale.setScalar(damp(core.current.scale.x, s, SNAP, dt))
     }
 
     // ── Trail ────────────────────────────────────────────────────────────────

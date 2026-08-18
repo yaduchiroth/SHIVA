@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useOdinStore, type CompanionRuntime } from '@/core/store/useOdinStore'
 import { damp } from '@/lib/math'
+import { MAX_STEP, SETTLE } from '@/core/config/motion'
 import { firePulse, orbDrive } from './orbDrive'
 import { labelSprite } from './labelSprite'
 
@@ -143,7 +144,7 @@ function Companion({ companion, index }: { companion: CompanionRuntime; index: n
   useFrame((_, dt) => {
     const g = group.current
     if (!g) return
-    const step = Math.min(dt, 0.05)
+    const step = Math.min(dt, MAX_STEP)
     const drive = STATE_DRIVE[companion.state]
     const t = orbDrive.time
 
@@ -159,20 +160,22 @@ function Companion({ companion, index }: { companion: CompanionRuntime; index: n
       // A slow breath on top of the state's level, so a dormant companion is
       // still visibly alive rather than a dead marker.
       const breathe = 0.85 + 0.15 * Math.sin(t * 1.4 + orbit.phase)
-      material.opacity = damp(material.opacity, drive.glow * breathe, 5, step)
-      body.current.scale.setScalar(damp(body.current.scale.x, 0.85 + drive.glow * 0.5, 5, step))
+      material.opacity = damp(material.opacity, drive.glow * breathe, SETTLE, step)
+      body.current.scale.setScalar(
+        damp(body.current.scale.x, 0.85 + drive.glow * 0.5, SETTLE, step),
+      )
     }
     if (cage.current) {
       cage.current.rotation.y += step * (0.4 + drive.glow)
       cage.current.rotation.x += step * 0.2
       const material = cage.current.material as THREE.MeshBasicMaterial
-      material.opacity = damp(material.opacity, 0.12 + drive.glow * 0.4, 5, step)
+      material.opacity = damp(material.opacity, 0.12 + drive.glow * 0.4, SETTLE, step)
     }
 
     // The beam only exists while the companion is actually out.
     const live = companion.state === 'working' || companion.state === 'returning'
     const material = beamLine.material as THREE.LineBasicMaterial
-    material.opacity = damp(material.opacity, live ? 0.5 : 0, 6, step)
+    material.opacity = damp(material.opacity, live ? 0.5 : 0, SETTLE, step)
     if (material.opacity > 0.01) {
       const positions = beamGeometry.attributes.position as THREE.BufferAttribute
       positions.setXYZ(0, 0, 0, 0)

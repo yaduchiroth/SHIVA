@@ -1,5 +1,11 @@
 import * as THREE from 'three'
-import { MAX_PULSES, PULSE_LIFE, PULSE_SPEED, orbDrive } from './orbDrive'
+import { MAX_HANDS, MAX_PULSES, PULSE_LIFE, PULSE_SPEED, orbDrive } from './orbDrive'
+import {
+  ORB_APERTURE_GAIN,
+  ORB_PUSH_FALLOFF,
+  ORB_PUSH_STRENGTH,
+  ORB_SPREAD_GAIN,
+} from '@/core/config/motion'
 
 /**
  * GLSL shared by every layer that reacts to a pulse.
@@ -99,3 +105,85 @@ float pointFalloff() {
   return pow(1.0 - d * 2.0, 1.8);
 }
 `
+
+/**
+ * GLSL for the orb's response to a hand.
+ *
+ * Two things, both per-vertex and both from uniforms, so a hand sweeping
+ * through six hundred neurons and four hundred protons costs the same as a hand
+ * sweeping through none.
+ *
+ * `displaceByHands` pushes particles out of the way. The falloff is Gaussian
+ * and that is load-bearing: an inverse-square field goes to infinity at zero
+ * distance, so a particle that happens to sit exactly where the hand is gets
+ * flung out of the scene — once, unreproducibly, and looking like a bug in the
+ * geometry. A Gaussian peaks at a finite value and dies smoothly.
+ *
+ * `apertureScale` is the slower channel: an open palm swells the whole layer,
+ * a fist tightens it, and a two-handed spread separates the layers by pushing
+ * outer ones further than inner ones.
+ */
+export const HAND_GLSL = /* glsl */ `
+uniform vec4 uHands[${MAX_HANDS}];
+uniform float uSpread;
+uniform float uAperture;
+uniform float uLayer;
+
+vec3 displaceByHands(vec3 p) {
+  vec3 offset = vec3(0.0);
+  for (int i = 0; i < ${MAX_HANDS}; i++) {
+    float presence = uHands[i].w;
+    if (presence <= 0.001) continue;
+    vec3 toHand = p - uHands[i].xyz;
+    float d2 = dot(toHand, toHand);
+    // Guarded before normalising: at zero distance the direction is undefined,
+    // and normalize() of a zero vector is NaN, which propagates to the vertex
+    // position and takes the whole particle off screen permanently.
+    if (d2 < 1e-6) continue;
+    float push = presence * ${ORB_PUSH_STRENGTH.toFixed(3)} * exp(-d2 * ${ORB_PUSH_FALLOFF.toFixed(3)});
+    offset += toHand * inversesqrt(d2) * push;
+  }
+  return p + offset;
+}
+
+/**
+ * Scale for this layer. uLayer is 0 at the core and 1 at the outer shell, so a
+ * spread separates the layers instead of inflating the object uniformly.
+ */
+float apertureScale() {
+  return 1.0 + uAperture * ${ORB_APERTURE_GAIN.toFixed(3)} + uSpread * uLayer * ${ORB_SPREAD_GAIN.toFixed(3)};
+}
+`
+
+/** Uniform block for the hand channel. Every layer that moves needs its own. */
+export interface HandUniforms {
+  uHands: { value: THREE.Vector4[] }
+  uSpread: { value: number }
+  uAperture: { value: number }
+  uLayer: { value: number }
+}
+
+/**
+ * @param layer 0 at the core, 1 at the outer shell — how much a spread moves it.
+ */
+export const handUniforms = (layer: number): HandUniforms => ({
+  uHands: { value: Array.from({ length: MAX_HANDS }, () => new THREE.Vector4()) },
+  uSpread: { value: 0 },
+  uAperture: { value: 0 },
+  uLayer: { value: layer },
+})
+
+/** Copies the current hand state in. Written into the existing objects — see `syncPulseUniforms`. */
+export function syncHandUniforms(u: HandUniforms): void {
+  const hands = u.uHands.value
+  for (let i = 0; i < hands.length; i++) {
+    hands[i]!.set(
+      orbDrive.hands[i * 4]!,
+      orbDrive.hands[i * 4 + 1]!,
+      orbDrive.hands[i * 4 + 2]!,
+      orbDrive.hands[i * 4 + 3]!,
+    )
+  }
+  u.uSpread.value = orbDrive.spread
+  u.uAperture.value = orbDrive.aperture
+}

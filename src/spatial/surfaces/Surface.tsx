@@ -11,6 +11,7 @@ import { damp } from '@/lib/math'
 import { emit } from '@/core/events/bus'
 import { SURFACE_H, SURFACE_PX, SURFACE_SCALE, SURFACE_W, type SurfaceTransform } from './layout'
 import { SurfaceBody } from './content/SurfaceBody'
+import { EASE, MAX_STEP, SETTLE } from '@/core/config/motion'
 
 /**
  * One screen in the room: a WebGL frame with live DOM inside it.
@@ -45,6 +46,7 @@ interface Props {
 export function Surface({ surface, transform }: Props) {
   const group = useRef<THREE.Group>(null)
   const border = useRef<THREE.LineSegments>(null)
+  const plane = useRef<THREE.Mesh>(null)
   const focused = useSurfaceStore((s) => s.focused === surface.id)
   const focus = useSurfaceStore((s) => s.focus)
   const remove = useSurfaceStore((s) => s.remove)
@@ -74,11 +76,21 @@ export function Surface({ surface, transform }: Props) {
    * belongs rather than flying in from the origin.
    */
   const placed = useRef(false)
+  /**
+   * 0 arriving, 1 present, back to 0 leaving.
+   *
+   * Driven in the frame loop and written straight to the DOM node's style,
+   * never to React state — this changes every frame, and a state write per
+   * frame would re-render the surface's whole content, iframe included, sixty
+   * times a second.
+   */
+  const appear = useRef(0)
+  const body = useRef<HTMLDivElement>(null)
 
   useFrame((_, dt) => {
     const g = group.current
     if (!g) return
-    const step = Math.min(dt, 0.05)
+    const step = Math.min(dt, MAX_STEP)
 
     target.set(...transform.position)
     euler.set(...transform.rotation)
@@ -93,19 +105,30 @@ export function Surface({ surface, transform }: Props) {
       placed.current = true
       g.position.copy(target)
       g.quaternion.copy(quat)
-      return
     }
 
-    g.position.x = damp(g.position.x, target.x, 6, step)
-    g.position.y = damp(g.position.y, target.y, 6, step)
-    g.position.z = damp(g.position.z, target.z, 6, step)
-    g.quaternion.slerp(quat, 1 - Math.exp(-6 * step))
+    g.position.x = damp(g.position.x, target.x, SETTLE, step)
+    g.position.y = damp(g.position.y, target.y, SETTLE, step)
+    g.position.z = damp(g.position.z, target.z, SETTLE, step)
+    g.quaternion.slerp(quat, 1 - Math.exp(-SETTLE * step))
+
+    // Arrive and leave, rather than appear and vanish. A surface that pops out
+    // of existence mid-frame takes its neighbours' layout with it in the same
+    // frame, which is the most jarring transition in the interface.
+    appear.current = damp(appear.current, surface.removing ? 0 : 1, EASE, step)
+    const eased = appear.current
+    // Scale from 0.86 rather than 0: growing from nothing reads as a zoom
+    // effect, while a small step up reads as something settling into place.
+    g.scale.setScalar(0.86 + 0.14 * eased)
+    if (body.current) body.current.style.opacity = String(eased)
 
     const mat = border.current?.material as THREE.LineBasicMaterial | undefined
     if (mat) {
-      mat.color.lerp(focused ? FRAME_FOCUS : FRAME, 1 - Math.exp(-8 * step))
-      mat.opacity = damp(mat.opacity, focused ? 0.95 : 0.45, 8, step)
+      mat.color.lerp(focused ? FRAME_FOCUS : FRAME, 1 - Math.exp(-EASE * step))
+      mat.opacity = damp(mat.opacity, (focused ? 0.95 : 0.45) * eased, EASE, step)
     }
+    const backing = plane.current?.material as THREE.MeshBasicMaterial | undefined
+    if (backing) backing.opacity = 0.72 * eased
   })
 
   return (
@@ -113,9 +136,9 @@ export function Surface({ surface, transform }: Props) {
       {/* Backing. Not transparent-black but a dark tint, so the volumetric
           environment behind still reads through and the surface belongs to the
           room rather than being a hole cut in it. */}
-      <mesh>
+      <mesh ref={plane}>
         <planeGeometry args={[SURFACE_W, SURFACE_H]} />
-        <meshBasicMaterial color={PALETTE.void} transparent opacity={0.72} depthWrite={false} />
+        <meshBasicMaterial color={PALETTE.void} transparent opacity={0} depthWrite={false} />
       </mesh>
 
       <lineSegments ref={border} geometry={borderGeometry}>
@@ -136,6 +159,8 @@ export function Surface({ surface, transform }: Props) {
         zIndexRange={[10, 0]}
       >
         <div
+          ref={body}
+          style={{ opacity: 0 }}
           className="flex h-full w-full flex-col overflow-hidden"
           data-testid="surface"
           data-surface-id={surface.id}

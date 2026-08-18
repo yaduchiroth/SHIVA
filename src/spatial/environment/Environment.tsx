@@ -12,6 +12,7 @@ import { StudioEnvironment } from './StudioEnvironment'
 import { VolumetricFog } from './VolumetricFog'
 import { useDataStore, type Sky } from '@/core/store/useDataStore'
 import { damp } from '@/lib/math'
+import { DRIFT, GLIDE } from '@/core/config/motion'
 
 /**
  * The lighting rig and world.
@@ -75,16 +76,16 @@ export function Environment({ quality, reducedMotion, sunRef }: Props) {
     // Damped, not assigned: weather updates arrive as a step change every ten
     // minutes, and snapping the lighting would look like a bug.
     if (fog.current) {
-      fog.current.density = damp(fog.current.density, quality.fogDensity * target.fog, 1.2, dt)
-      fog.current.color.lerp(tint, 1 - Math.exp(-1.2 * dt))
+      fog.current.density = damp(fog.current.density, quality.fogDensity * target.fog, GLIDE, dt)
+      fog.current.color.lerp(tint, 1 - Math.exp(-GLIDE * dt))
     }
     if (keyLight.current) {
       const wanted = target.key * (isDay ? 1 : NIGHT_KEY_SCALE)
-      keyLight.current.intensity = damp(keyLight.current.intensity, wanted, 1.2, dt)
+      keyLight.current.intensity = damp(keyLight.current.intensity, wanted, GLIDE, dt)
     }
     if (ambient.current) {
       const wanted = target.ambient * (isDay ? 1 : NIGHT_AMBIENT_SCALE)
-      ambient.current.intensity = damp(ambient.current.intensity, wanted, 1.2, dt)
+      ambient.current.intensity = damp(ambient.current.intensity, wanted, GLIDE, dt)
     }
 
     if (sweep.current && sky === 'storm' && !reducedMotion) {
@@ -93,7 +94,7 @@ export function Environment({ quality, reducedMotion, sunRef }: Props) {
       const flash = Math.pow(Math.max(0, Math.sin(state.clock.elapsedTime * 1.7)), 60)
       sweep.current.intensity = 26 + flash * 340
     } else if (sweep.current) {
-      sweep.current.intensity = damp(sweep.current.intensity, 26, 3, dt)
+      sweep.current.intensity = damp(sweep.current.intensity, 26, DRIFT, dt)
     }
   })
 

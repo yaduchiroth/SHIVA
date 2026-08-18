@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import type { OrbBudget } from '@/core/config/quality'
 import { buildProtons, type Rgb } from './geometry'
 import { orbDrive } from './orbDrive'
-import { POINT_FALLOFF_GLSL } from './shaders'
+import { HAND_GLSL, POINT_FALLOFF_GLSL, handUniforms, syncHandUniforms } from './shaders'
 
 /**
  * Particles on inclined elliptical orbits — the atomic half of the avatar.
@@ -33,6 +33,7 @@ uniform float uTime;
 uniform float uSize;
 uniform float uEnergy;
 varying vec3 vColor;
+${HAND_GLSL}
 void main() {
   float orbitR = position.x;
   float speed = position.y;
@@ -51,6 +52,7 @@ void main() {
   );
 
   vColor = aColor;
+  p = displaceByHands(p * apertureScale());
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   gl_PointSize = uSize * aScale / max(0.001, -mv.z);
@@ -90,6 +92,9 @@ export function ProtonCloud({ budget, minRadius, maxRadius, hot, warm, seed }: P
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
+      // 1.0: the outermost layer, so a two-handed spread throws the proton
+      // cloud furthest — the orb visibly opening rather than merely growing.
+      ...handUniforms(1),
       uSize: { value: 90 },
       uEnergy: { value: 0.25 },
       uAccent: { value: new THREE.Color(1, 1, 1) },
@@ -98,6 +103,7 @@ export function ProtonCloud({ budget, minRadius, maxRadius, hot, warm, seed }: P
   )
 
   useFrame(() => {
+    syncHandUniforms(uniforms)
     uniforms.uTime.value = orbDrive.time
     uniforms.uEnergy.value = orbDrive.energy
     uniforms.uAccent.value.setRGB(orbDrive.accent[0]!, orbDrive.accent[1]!, orbDrive.accent[2]!)

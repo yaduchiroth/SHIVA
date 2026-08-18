@@ -11,7 +11,7 @@ import {
   wallFitsFrustum,
 } from '@/spatial/surfaces/layout'
 import { CAMERA_BASE, MIN_ASPECT } from '@/core/config/viewpoint'
-import { MAX_SURFACES, resetSurfaces, useSurfaceStore } from '@/core/store/useSurfaceStore'
+import { EXIT_MS, MAX_SURFACES, resetSurfaces, useSurfaceStore } from '@/core/store/useSurfaceStore'
 
 /**
  * The AR surface wall.
@@ -147,6 +147,43 @@ test.describe('the surface store', () => {
     const { surfaces } = useSurfaceStore.getState()
     expect(surfaces).toHaveLength(MAX_SURFACES)
     expect(surfaces[0]!.id).toBe('k3')
+  })
+
+  test('a removed surface eases out before it is dropped', async () => {
+    // Removal used to be instantaneous, so a closed surface vanished mid-frame
+    // and its neighbours snapped into the gap — the most jarring transition in
+    // the interface. It is marked first and dropped after the fade.
+    const store = useSurfaceStore.getState()
+    store.push({ kind: 'card', title: 'a', body: '' }, 'k')
+    store.remove('k')
+    expect(useSurfaceStore.getState().surfaces[0]).toMatchObject({ id: 'k', removing: true })
+    await new Promise((r) => setTimeout(r, EXIT_MS + 120))
+    expect(useSurfaceStore.getState().surfaces).toHaveLength(0)
+  })
+
+  test('closing twice does not schedule a second drop', async () => {
+    // A second timer would fire after the id had been reused and take the new
+    // surface with it.
+    const store = useSurfaceStore.getState()
+    store.push({ kind: 'card', title: 'a', body: '' }, 'k')
+    store.remove('k')
+    store.remove('k')
+    await new Promise((r) => setTimeout(r, EXIT_MS + 120))
+    useSurfaceStore.getState().push({ kind: 'card', title: 'b', body: '' }, 'k')
+    await new Promise((r) => setTimeout(r, EXIT_MS + 120))
+    expect(useSurfaceStore.getState().surfaces).toHaveLength(1)
+  })
+
+  test('pushing to an id mid-fade brings it back rather than duplicating it', async () => {
+    const store = useSurfaceStore.getState()
+    store.push({ kind: 'card', title: 'a', body: '1' }, 'k')
+    store.remove('k')
+    useSurfaceStore.getState().push({ kind: 'card', title: 'a', body: '2' }, 'k')
+    expect(useSurfaceStore.getState().surfaces[0]).toMatchObject({ removing: false })
+    // And the pending timer must not delete the revived surface when it fires.
+    await new Promise((r) => setTimeout(r, EXIT_MS + 120))
+    expect(useSurfaceStore.getState().surfaces).toHaveLength(1)
+    expect(useSurfaceStore.getState().surfaces[0]!.content).toMatchObject({ body: '2' })
   })
 
   test('removing the focused surface clears focus', () => {

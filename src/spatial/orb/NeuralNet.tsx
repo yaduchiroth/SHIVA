@@ -6,7 +6,15 @@ import * as THREE from 'three'
 import type { OrbBudget } from '@/core/config/quality'
 import { buildNeurons } from './geometry'
 import { orbDrive } from './orbDrive'
-import { PULSE_GLSL, POINT_FALLOFF_GLSL, pulseUniforms, syncPulseUniforms } from './shaders'
+import {
+  HAND_GLSL,
+  POINT_FALLOFF_GLSL,
+  PULSE_GLSL,
+  handUniforms,
+  pulseUniforms,
+  syncHandUniforms,
+  syncPulseUniforms,
+} from './shaders'
 
 /**
  * The neurons: nodes on a shell, wired to their neighbours, lit by travelling
@@ -31,12 +39,17 @@ uniform float uEnergy;
 varying float vPulse;
 varying float vTwinkle;
 ${PULSE_GLSL}
+${HAND_GLSL}
 void main() {
+  // Sampled at the node's REST position, not its displaced one. A pulse is a
+  // wave through the network, and moving its sample point with the hand would
+  // make waving at the orb also drag every travelling pulse sideways.
   vPulse = pulseAt(position);
   // Each node breathes on its own phase; without this the field pulses in
   // lockstep and reads as one object flickering rather than as many.
   vTwinkle = 0.55 + 0.45 * sin(uTime * 1.7 + aPhase);
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vec3 p = displaceByHands(position * apertureScale());
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float size = uSize * aScale * (1.0 + vPulse * 1.9 + uEnergy * 0.35);
   // Divide by view depth so points shrink with distance. Without it they are a
@@ -63,12 +76,17 @@ const EDGE_VERT = /* glsl */ `
 attribute vec3 aMid;
 varying float vPulse;
 ${PULSE_GLSL}
+${HAND_GLSL}
 void main() {
   // Sampled at the edge's midpoint rather than at each endpoint, so an edge
   // lights as one thing. Per-endpoint sampling makes a wavefront appear to bend
   // every line it crosses, which reads as a geometry bug.
   vPulse = pulseAt(aMid);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  // Each endpoint is displaced independently, so a synapse stretches between
+  // two nodes the hand has moved apart — the network deforms rather than
+  // sliding, which is the difference between a web and a decal.
+  vec3 p = displaceByHands(position * apertureScale());
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `
 
@@ -107,6 +125,9 @@ export function NeuralNet({ budget, innerRadius, outerRadius, seed }: Props) {
   const nodeUniforms = useMemo(
     () => ({
       ...pulseUniforms(),
+      // 0.6: the neural shell sits between the core and the outer wireframe, so
+      // a two-handed spread moves it, but less than the shell it lives inside.
+      ...handUniforms(0.6),
       uSize: { value: 190 },
       uEnergy: { value: 0.25 },
       uAccent: { value: new THREE.Color(1, 1, 1) },
@@ -117,6 +138,7 @@ export function NeuralNet({ budget, innerRadius, outerRadius, seed }: Props) {
   const edgeUniforms = useMemo(
     () => ({
       ...pulseUniforms(),
+      ...handUniforms(0.6),
       uBase: { value: 0.075 },
       uEnergy: { value: 0.25 },
       uAccent: { value: new THREE.Color(1, 1, 1) },
@@ -127,6 +149,7 @@ export function NeuralNet({ budget, innerRadius, outerRadius, seed }: Props) {
   useFrame(() => {
     for (const u of [nodeUniforms, edgeUniforms]) {
       syncPulseUniforms(u)
+      syncHandUniforms(u)
       u.uEnergy.value = orbDrive.energy
       u.uAccent.value.setRGB(orbDrive.accent[0]!, orbDrive.accent[1]!, orbDrive.accent[2]!)
     }

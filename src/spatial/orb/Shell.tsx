@@ -5,6 +5,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { buildShell, type Rgb } from './geometry'
 import { orbDrive } from './orbDrive'
+import { EASE, MAX_STEP, ORB_APERTURE_GAIN, ORB_SPREAD_GAIN } from '@/core/config/motion'
+import { damp } from '@/lib/math'
 
 /**
  * The wireframe sphere: latitude rings, meridians, bright cross bands and a
@@ -84,10 +86,22 @@ export function Shell({
     // Clamped: a tab restored after being backgrounded delivers one enormous
     // delta, which without this spins the orb through several turns in a
     // single frame.
-    const step = Math.min(dt, 0.05)
-    const rate = 0.16 + orbDrive.energy * 0.35
+    const step = Math.min(dt, MAX_STEP)
+
+    // Ambient turn, plus whatever momentum the hands have imparted. Momentum
+    // rather than a target rate is what makes a flick feel like a flick — the
+    // shell keeps going and coasts down instead of stopping with your hand.
+    const rate = 0.16 + orbDrive.energy * 0.35 + orbDrive.spin
     g.rotation.y += step * rate
     g.rotation.x = Math.sin(orbDrive.time * 0.08) * 0.05
+
+    // The shell is one merged object, so aperture and spread are a group scale
+    // rather than a shader — free, and it keeps the CPU/GPU split honest: the
+    // layers with thousands of particles compute this per vertex because they
+    // have to, and this one does not.
+    const target = 1 + orbDrive.aperture * ORB_APERTURE_GAIN + orbDrive.spread * ORB_SPREAD_GAIN
+    const scale = damp(g.scale.x, target, EASE, step)
+    g.scale.setScalar(scale)
   })
 
   return (

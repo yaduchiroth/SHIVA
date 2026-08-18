@@ -64,7 +64,26 @@ export interface Surface {
   content: SurfaceContent
   /** When it arrived. Drives eviction and the "newest first" ordering. */
   at: number
+  /**
+   * Set while the surface is easing out, before it is actually dropped.
+   *
+   * Removal used to be instantaneous, which meant a closed surface vanished
+   * mid-frame and its neighbours snapped into the gap — the single most jarring
+   * transition in the interface. Marking it instead lets it shrink and fade
+   * where it stands, and the neighbours reflow once it is gone rather than
+   * racing it.
+   */
+  removing?: boolean
 }
+
+/**
+ * How long a surface takes to ease out before it is dropped from the list.
+ *
+ * Matches the `EASE` damping rate the component animates with, so the surface
+ * is essentially invisible by the time it disappears. Shorter and it pops out
+ * mid-fade; longer and the gap it leaves sits empty.
+ */
+export const EXIT_MS = 350
 
 /**
  * Two rows of three.
@@ -111,7 +130,11 @@ export const useSurfaceStore = create<SurfaceState>((set) => ({
         // `at` is preserved deliberately: an update is not a new arrival, and
         // refreshing it would keep pushing the surface to the front of the
         // eviction queue and starve everything else.
-        next[existing] = { ...next[existing]!, content }
+        //
+        // `removing` is cleared, so pushing to an id that is mid-fade brings it
+        // back rather than adding a duplicate that the pending timer would then
+        // delete along with the original.
+        next[existing] = { ...next[existing]!, content, removing: false }
         return { surfaces: next }
       }
       return {
@@ -121,13 +144,29 @@ export const useSurfaceStore = create<SurfaceState>((set) => ({
     return key
   },
 
-  remove: (id) =>
+  remove: (id) => {
+    const existing = useSurfaceStore.getState().surfaces.find((v) => v.id === id)
+    // Already leaving: a second close must not schedule a second drop, or the
+    // timer fires after the id has been reused and takes the new surface with it.
+    if (!existing || existing.removing) return
     set((s) => ({
-      surfaces: s.surfaces.filter((v) => v.id !== id),
+      surfaces: s.surfaces.map((v) => (v.id === id ? { ...v, removing: true } : v)),
+      // Focus releases immediately. A surface on its way out should not still
+      // be pulled forward while it fades.
       focused: s.focused === id ? null : s.focused,
-    })),
+    }))
+    setTimeout(() => {
+      // Guarded on `removing`, not just the id: a push to the same id during
+      // the fade revives the surface, and an unguarded filter would delete the
+      // revived one when the old timer came due.
+      set((s) => ({ surfaces: s.surfaces.filter((v) => !(v.id === id && v.removing)) }))
+    }, EXIT_MS)
+  },
 
-  clear: () => set({ surfaces: [], focused: null }),
+  clear: () => {
+    const ids = useSurfaceStore.getState().surfaces.map((v) => v.id)
+    for (const id of ids) useSurfaceStore.getState().remove(id)
+  },
   focus: (focused) => set({ focused }),
 }))
 

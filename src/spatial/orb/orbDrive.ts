@@ -29,6 +29,9 @@ export const PULSE_SPEED = 3.2
 /** How long a pulse stays lit. Past this it is off, and the slot is reusable. */
 export const PULSE_LIFE = 1.6
 
+/** How many hands the orb tracks. Two, because there are two. */
+export const MAX_HANDS = 2
+
 export interface OrbDrive {
   /** Seconds since the scene started. The shaders' single clock. */
   time: number
@@ -46,6 +49,42 @@ export interface OrbDrive {
   phase: BrainPhase
   /** Next ring-buffer slot to overwrite. */
   cursor: number
+
+  // ── The continuous channel: what your hands are doing, right now ──────────
+  //
+  // Discrete events (a pinch, a wake) fire pulses. These are the other half:
+  // values that change every frame while a hand is up, so the orb responds to
+  // being approached rather than only to being tapped. All of them are shader
+  // uniforms, so the whole channel costs about ten floats a frame and no CPU
+  // work in any layer.
+
+  /**
+   * Per hand: xyz in ORB space, then presence 0..1.
+   *
+   * Orb space, not world space — the hand's tracking plane sits five units in
+   * front of the orb and would never intersect it. `handToOrb` maps the frame
+   * onto the orb's own extent instead, so sweeping a hand across the camera
+   * sweeps it through the object.
+   *
+   * Presence is damped rather than boolean: tracking blinks, and a hand's
+   * influence popping in and out is far more noticeable than the influence
+   * itself.
+   */
+  hands: Float32Array
+
+  /**
+   * Two-handed spread: -1 hands together, 0 at rest, +1 hands wide apart.
+   *
+   * Zero whenever fewer than two hands are visible, so putting one hand down
+   * closes the orb rather than freezing it half-open.
+   */
+  spread: number
+
+  /** Aperture: -1 a closed fist, 0 neutral, +1 an open palm. */
+  aperture: number
+
+  /** Spin imparted by hand motion, decaying toward zero. Radians per second. */
+  spin: number
 }
 
 export const orbDrive: OrbDrive = {
@@ -57,6 +96,10 @@ export const orbDrive: OrbDrive = {
   accent: new Float32Array([0.84, 0.9, 1]),
   phase: 'idle',
   cursor: 0,
+  hands: new Float32Array(MAX_HANDS * 4),
+  spread: 0,
+  aperture: 0,
+  spin: 0,
 }
 
 /** Sends a shockwave out through the network from a point in orb space. */
@@ -113,4 +156,39 @@ export function resetOrbDrive(): void {
   orbDrive.surge = 0
   orbDrive.phase = 'idle'
   orbDrive.accent.set(PHASE_DRIVE.idle.slice(0, 3))
+  orbDrive.hands.fill(0)
+  orbDrive.spread = 0
+  orbDrive.aperture = 0
+  orbDrive.spin = 0
+}
+
+/**
+ * Normalised tracking space → the orb's own space.
+ *
+ * The hand cursor is placed on a plane 6.5 units in front of the camera, which
+ * is about five units in front of the orb — so in world terms a hand never
+ * comes near it and a proximity field would never fire. This maps the frame
+ * onto the orb's extent instead: the centre of the camera image is the centre
+ * of the orb, and the edges reach a little past the shell so a hand can be seen
+ * to approach from outside before it starts pushing.
+ *
+ * X is mirrored and Y inverted for the same reasons `hands/projection.ts` does
+ * it — the feed is shown mirrored, and video counts down while the world counts
+ * up. Depth comes from MediaPipe's relative z, which is noisy in absolute terms
+ * but perfectly good for "reaching in and out".
+ */
+export function handToOrb(
+  out: Float32Array,
+  offset: number,
+  x: number,
+  y: number,
+  z: number,
+  reach: number,
+): void {
+  out[offset] = (0.5 - x) * 2 * reach
+  out[offset + 1] = (0.5 - y) * 2 * reach
+  // Scaled well below x and y: MediaPipe's z is a rough wrist-relative offset,
+  // and trusting it as far as the other two axes makes the influence sphere
+  // jitter in and out of the orb while the hand is still.
+  out[offset + 2] = Math.max(-1.5, Math.min(1.5, z * 4))
 }
