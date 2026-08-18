@@ -89,7 +89,7 @@ class Shruti:
                         )
             except Exception as e:
                 await self.bus.log(f"shruti error: {e}")
-            await asyncio.sleep(self.cfg.huginn_poll_seconds)
+            await asyncio.sleep(self.cfg.shruti_poll_seconds)
 
 
 # ---------------------------------------------------------------------------
@@ -130,4 +130,4 @@ async def draft_email(args: dict[str, Any]) -> dict[str, Any]:
         return _ok(f"Draft failed: {e}")
 
 
-HUGINN_TOOLS = [draft_email]
+SHRUTI_TOOLS = [draft_email]

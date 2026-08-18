@@ -68,7 +68,7 @@ Then run SHIVA. When you appear on camera after being away (>2 min default),
 SHIVA greets you unprompted — *"Good morning, Boss. Shall I brief you?"* —
 and **opens the mic automatically** so you can just answer "yes". The HUD
 shows **◉ BOSS · VERIFIED** in gold; unknown faces get **◉ GUEST · UNKNOWN**
-(plus a spoken challenge if `HEIMDALL_GREET_GUESTS=1`). Enroll in demo-room
+(plus a spoken challenge if `NANDI_GREET_GUESTS=1`). Enroll in demo-room
 lighting; re-running adds more samples. Biometrics = embeddings only, stored
 locally in `data/nandi.json` — nothing leaves the Mac (that's the pitch
 line too). Two small ONNX models (~40 MB) auto-download on first run.

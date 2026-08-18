@@ -83,7 +83,7 @@ class Nandi:
 
     # Main loop ------------------------------------------------------------
     async def run(self) -> None:
-        if not self.cfg.heimdall_enabled:
+        if not self.cfg.nandi_enabled:
             return
         try:
             import cv2  # noqa: F401
@@ -146,7 +146,7 @@ class Nandi:
             if hud_open:
                 self._emit_frame(frame, results, loop)
             else:
-                time.sleep(self.cfg.heimdall_interval)  # nobody watching — save CPU
+                time.sleep(self.cfg.nandi_interval)  # nobody watching — save CPU
         cap.release()
 
     def _check_wave(self, frame, loop) -> None:
@@ -165,11 +165,11 @@ class Nandi:
         if not self.is_speaking():
             return
         now = time.time()
-        if now - self._last_wave < self.cfg.heimdall_wave_cooldown:
+        if now - self._last_wave < self.cfg.nandi_wave_cooldown:
             return
         diff = cv2.absdiff(gray, prev)
         changed = float(np.count_nonzero(diff > 25)) / diff.size
-        if changed >= self.cfg.heimdall_wave_ratio:
+        if changed >= self.cfg.nandi_wave_ratio:
             self._last_wave = now
             asyncio.run_coroutine_threadsafe(
                 self.bus.log(f"nandi: wave detected ({changed:.0%}) — stopping"), loop)
@@ -194,12 +194,12 @@ class Nandi:
                     self.bus.log(f"nandi: {name} in sight (match {score:.2f})"), loop)
             prev = self.last_seen.get(name, 0.0)
             self.last_seen[name] = now
-            if now - prev > self.cfg.heimdall_absence:
+            if now - prev > self.cfg.nandi_absence:
                 asyncio.run_coroutine_threadsafe(self.on_known(name), loop)
         else:
             prev = self.guest_last
             self.guest_last = now
-            if now - prev > self.cfg.heimdall_absence and self.on_guest:
+            if now - prev > self.cfg.nandi_absence and self.on_guest:
                 asyncio.run_coroutine_threadsafe(self.on_guest(), loop)
 
     def _emit_frame(self, frame, results, loop) -> None:
@@ -236,7 +236,7 @@ class Nandi:
                                          cv2.FaceRecognizerSF_FR_COSINE)
                 if score > best_score:
                     best_name, best_score = name, score
-        if best_score >= self.cfg.heimdall_threshold:
+        if best_score >= self.cfg.nandi_threshold:
             return best_name, best_score
         return None, best_score
 

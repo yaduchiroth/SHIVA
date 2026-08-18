@@ -11,30 +11,39 @@ bold "── SHIVA setup ──────────────────�
 if ! command -v brew >/dev/null; then
   echo "Homebrew is required → https://brew.sh"; exit 1
 fi
-bold "[1/5] Homebrew packages (ffmpeg, portaudio, ical-buddy)…"
+bold "[1/6] Homebrew packages (ffmpeg, portaudio, ical-buddy)…"
 brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
 brew list portaudio >/dev/null 2>&1 || brew install portaudio
 brew list ical-buddy >/dev/null 2>&1 || brew install ical-buddy || true
 
 # 2. Node + Claude Code CLI (SHIVA's brain auth rides on your Claude subscription)
-bold "[2/5] Claude Code CLI…"
+bold "[2/6] Claude Code CLI…"
 if ! command -v node >/dev/null; then brew install node; fi
 if ! command -v claude >/dev/null; then npm install -g @anthropic-ai/claude-code; fi
 echo "    → If you haven't yet: run 'claude' once and log in with your Claude account."
 
 # 3. playactor for the PS5 (optional)
-bold "[3/5] playactor (PS5 control, optional)…"
+bold "[3/6] playactor (PS5 control, optional)…"
 command -v playactor >/dev/null || npm install -g playactor || true
 
 # 4. Python env
-bold "[4/5] Python environment…"
+bold "[4/6] Python environment…"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt
 
-# 5. Config
-bold "[5/5] Config…"
+# 5. The interface
+#
+# Both halves are one repository now, and setting up half of a thing is how you
+# discover the other half at the least convenient moment. Runs in the root, not
+# here — `npm install` there also vendors the MediaPipe WASM and downloads the
+# hand-landmarker model.
+bold "[5/6] Interface dependencies…"
+( cd .. && npm install )
+
+# 6. Config
+bold "[6/6] Config…"
 [ -f .env ] || cp .env.example .env
 echo ""
 bold "── Done. Next steps ────────────────────────────────"

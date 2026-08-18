@@ -86,7 +86,7 @@ class Vani:
             score = float(np.max(samples @ emb))   # samples are unit vectors
             if score > best:
                 best_name, best = name, score
-        if best >= self.cfg.bragi_threshold:
+        if best >= self.cfg.vani_threshold:
             return best_name, best
         return None, best
 

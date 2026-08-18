@@ -93,7 +93,7 @@ async def main() -> None:
     _tool_ctx["kaala"] = kaala
 
     from .vani import Vani
-    vani = Vani(cfg) if cfg.bragi_enabled else None
+    vani = Vani(cfg) if cfg.vani_enabled else None
     clapdet = ClapDetector()   # shared: ears feeds it while awake
 
     # Voice mute: "stop" silences SHIVA's listening; "wake up" resumes it.
@@ -155,7 +155,7 @@ async def main() -> None:
                     and not brain.responding
                     and bus.current_state in ("idle", "listening"))
 
-    def odin_talking() -> bool:
+    def shiva_talking() -> bool:
         return voice.busy() or brain.responding
 
     async def on_utterance(text: str, speaker: str | None = None) -> None:
@@ -239,7 +239,7 @@ async def main() -> None:
     async def on_guest() -> None:
         brain.note_sighting("an unrecognized guest")
         await bus.emit("presence", name="Guest", known=False)
-        if cfg.heimdall_greet_guests:
+        if cfg.nandi_greet_guests:
             await voice.say("Welcome. I don't believe we've met.")
 
     def start_awake_services() -> None:
@@ -250,7 +250,7 @@ async def main() -> None:
         svc["tasks"] = [asyncio.create_task(heim.run())]
         if not args.text:
             ears = Ears(cfg, bus, on_utterance, hot=presence_hot, vani=vani,
-                        identity_hint=identity_hint, is_speaking=odin_talking,
+                        identity_hint=identity_hint, is_speaking=shiva_talking,
                         clap_feed=clapdet.feed)
             # Vani runs only when it matters: pre-verification, or when the
             # verified face ISN'T in sight (re-lock guard). Saves ~1s/utterance.

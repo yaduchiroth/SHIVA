@@ -13,16 +13,34 @@ load_dotenv(ROOT / ".env")
 # configuration in the rebrand. Reported once each, at startup, rather than
 # swallowed — a variable that quietly stopped being read is the kind of thing
 # you only notice weeks later when some feature turns out to have been off.
+#
+# Keyed by prefix rather than by whole name because that is how they were
+# renamed, and because the alternative — a list of forty pairs — goes stale the
+# moment anyone adds a setting.
+_LEGACY_PREFIXES = {
+    "SHIVA_": "ODIN_",
+    "NANDI_": "HEIMDALL_",
+    "SHRUTI_": "HUGINN_",
+    "SMRITI_": "MUNINN_",
+    "DRISHTI_": "MIMIR_",
+    "VANI_": "BRAGI_",
+    "KAALA_": "NORNS_",
+}
+
 _DEPRECATED: list[str] = []
 
 
 def _env(key: str, default: str = "") -> str:
     value = os.environ.get(key)
-    if value is None and key.startswith("SHIVA_"):
-        legacy = "ODIN_" + key[len("SHIVA_"):]
-        value = os.environ.get(legacy)
-        if value is not None:
-            _DEPRECATED.append(f"{legacy} → {key}")
+    if value is None:
+        for current, legacy in _LEGACY_PREFIXES.items():
+            if not key.startswith(current):
+                continue
+            old_key = legacy + key[len(current):]
+            value = os.environ.get(old_key)
+            if value is not None:
+                _DEPRECATED.append(f"{old_key} → {key}")
+            break
     return (value if value is not None else default).strip()
 
 
@@ -91,11 +109,11 @@ class Config:
         self.whisper_model = _env("WHISPER_MODEL", "mlx-community/whisper-large-v3-turbo")
 
         # Vani — speaker recognition (who is talking) via Resemblyzer d-vectors.
-        self.bragi_enabled = _env("BRAGI_ENABLED", "1").lower() in ("1", "true", "yes")
-        self.bragi_threshold = float(_env("BRAGI_THRESHOLD", "0.72"))
+        self.vani_enabled = _env("VANI_ENABLED", "1").lower() in ("1", "true", "yes")
+        self.vani_threshold = float(_env("VANI_THRESHOLD", "0.72"))
         # Learn a person's voiceprint automatically while Nandi has their
         # face verified in sight — face proves identity, voice gets memorized.
-        self.bragi_autolearn = _env("BRAGI_AUTOLEARN", "1").lower() in ("1", "true", "yes")
+        self.vani_autolearn = _env("VANI_AUTOLEARN", "1").lower() in ("1", "true", "yes")
 
         # Devices (Kailash)
         self.mac2_ssh = _env("MAC2_SSH")            # e.g. "yadu@192.168.1.42"
@@ -110,19 +128,19 @@ class Config:
         # Shruti (email watcher) — Gmail app password (myaccount.google.com/apppasswords)
         self.gmail_address = _env("GMAIL_ADDRESS")
         self.gmail_app_password = _env("GMAIL_APP_PASSWORD")
-        self.huginn_poll_seconds = int(_env("HUGINN_POLL_SECONDS", "20"))
+        self.shruti_poll_seconds = int(_env("SHRUTI_POLL_SECONDS", "20"))
 
         # Nandi — face recognition at the gate
-        self.heimdall_enabled = _env("HEIMDALL_ENABLED", "1").lower() in ("1", "true", "yes")
+        self.nandi_enabled = _env("NANDI_ENABLED", "1").lower() in ("1", "true", "yes")
         self.camera_index = int(_env("CAMERA_INDEX", "0"))
-        self.heimdall_absence = int(_env("HEIMDALL_ABSENCE_SECONDS", "120"))
-        self.heimdall_interval = float(_env("HEIMDALL_INTERVAL", "0.6"))
-        self.heimdall_threshold = float(_env("HEIMDALL_THRESHOLD", "0.363"))
-        self.heimdall_greet_guests = _env("HEIMDALL_GREET_GUESTS", "0").lower() in ("1", "true", "yes")
+        self.nandi_absence = int(_env("NANDI_ABSENCE_SECONDS", "120"))
+        self.nandi_interval = float(_env("NANDI_INTERVAL", "0.6"))
+        self.nandi_threshold = float(_env("NANDI_THRESHOLD", "0.363"))
+        self.nandi_greet_guests = _env("NANDI_GREET_GUESTS", "0").lower() in ("1", "true", "yes")
         # Gesture barge-in: wave a hand across the lens to stop SHIVA mid-sentence.
         # Fraction of the frame that must change between frames to count as a wave.
-        self.heimdall_wave_ratio = float(_env("HEIMDALL_WAVE_RATIO", "0.35"))
-        self.heimdall_wave_cooldown = float(_env("HEIMDALL_WAVE_COOLDOWN", "2.0"))
+        self.nandi_wave_ratio = float(_env("NANDI_WAVE_RATIO", "0.35"))
+        self.nandi_wave_cooldown = float(_env("NANDI_WAVE_COOLDOWN", "2.0"))
 
         # Nandi's smart eye — NVIDIA vision-language model (cloud scene analysis)
         self.nvidia_vision_key = _env("NVIDIA_VISION_API_KEY")

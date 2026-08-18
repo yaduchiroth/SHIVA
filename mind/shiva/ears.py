@@ -191,7 +191,7 @@ class Ears:
 
         def work():
             has_prints = bool(self.vani.db)
-            learnable = self.cfg.bragi_autolearn and hinted and "guest" not in hinted
+            learnable = self.cfg.vani_autolearn and hinted and "guest" not in hinted
             if not has_prints and not learnable:
                 return None  # nothing enrolled and nothing we're allowed to learn
             name, _score = self.vani.identify(audio)

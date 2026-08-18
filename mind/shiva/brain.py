@@ -15,9 +15,9 @@ from claude_agent_sdk import (ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               ResultMessage, StreamEvent, create_sdk_mcp_server)
 
 from . import (tools_mac, tools_devices, tools_reminders, tools_vision,
-               tools_iot, shruti as huginn_mod, watchtower as watchtower_mod,
+               tools_iot, shruti as shruti_mod, watchtower as watchtower_mod,
                companions as companions_mod, tools_knowledge as tools_kb,
-               tools_companions as tools_comp, tools_norns as tools_norns_mod)
+               tools_companions as tools_comp, tools_kaala as tools_kaala_mod)
 from .dispatch import Dispatcher, build_hooks
 from .governor import Governor
 from .smriti import Smriti
@@ -157,10 +157,10 @@ class Brain:
         tools_mac._CTX["brain"] = self   # for reload_council
         all_tools = (tools_mac.MAC_TOOLS + tools_devices.DEVICE_TOOLS
                      + tools_reminders.REMINDER_TOOLS + tools_vision.VISION_TOOLS
-                     + tools_iot.IOT_TOOLS + huginn_mod.HUGINN_TOOLS
+                     + tools_iot.IOT_TOOLS + shruti_mod.SHRUTI_TOOLS
                      + watchtower_mod.WATCHTOWER_TOOLS + tools_kb.KNOWLEDGE_TOOLS
                      + tools_comp.COMPANION_TOOLS
-                     + tools_norns_mod.AUTOMATION_TOOLS)
+                     + tools_kaala_mod.AUTOMATION_TOOLS)
         if self.cfg.demo:
             from . import tools_demo
             all_tools = all_tools + tools_demo.DEMO_TOOLS

@@ -151,7 +151,7 @@ const COMPANION_STATES: ReadonlySet<string> = new Set([
   'failed',
 ])
 
-const ODIN_STATES: ReadonlySet<string> = new Set([
+const MIND_STATES: ReadonlySet<string> = new Set([
   'idle',
   'listening',
   'thinking',
@@ -176,7 +176,7 @@ export function parseMindEvent(raw: unknown): MindEvent | null {
   switch (kind) {
     case 'state': {
       const value = str(msg.value)
-      return { kind, value: (ODIN_STATES.has(value) ? value : 'idle') as MindState }
+      return { kind, value: (MIND_STATES.has(value) ? value : 'idle') as MindState }
     }
     case 'log':
       return { kind, text: str(msg.text) }
