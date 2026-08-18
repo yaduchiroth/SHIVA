@@ -151,6 +151,21 @@ export function isSurfaceDemoEnabled(): boolean {
   return new URLSearchParams(window.location.search).get('surfaces') === 'demo'
 }
 
+/**
+ * Whether to hold the lock screen open even with no mind to recognise you
+ * (`?lock=1`).
+ *
+ * The lock normally opens straight away when nothing could ever recognise you —
+ * that is the first and most important of its ways out. Which also means the
+ * ceremony is unreachable on any machine without the Python side running,
+ * including every machine the test suite runs on. This suppresses that one rule
+ * and nothing else.
+ */
+export function isLockForced(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('lock') === '1'
+}
+
 /** Secure context is a hard requirement for getUserMedia outside localhost. */
 export function canUseCamera(): boolean {
   if (typeof window === 'undefined') return false

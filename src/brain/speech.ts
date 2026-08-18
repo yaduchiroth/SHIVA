@@ -122,6 +122,49 @@ export const speechProvider = (): SpeechProvider => lastProvider
 export const speechFallbackReason = (): string | null => lastFallback
 
 /**
+ * Whether the browser will actually let SHIVA make a sound yet.
+ *
+ * Chrome suspends every `AudioContext` created without a prior user gesture and
+ * refuses to resume it, so a page that has never been clicked cannot play
+ * audio — no error, just silence. That matters most for the one utterance
+ * nobody clicks first: the greeting when SHIVA recognises you on a fresh tab.
+ */
+export const isAudioUnlocked = (): boolean =>
+  audioContext === null || audioContext.state === 'running'
+
+/**
+ * Resumes audio on the first interaction of any kind, whatever it was.
+ *
+ * Without this, the greeting is silent until the user happens to click
+ * something that itself makes a sound — and the first thing anyone does on this
+ * interface is wave at it, which is not a gesture the browser counts. Any
+ * pointer or key event anywhere in the document is enough, so pressing a HUD
+ * button, typing, or even dismissing something all arm it. Once.
+ */
+export function primeAudioOnGesture(): void {
+  if (typeof window === 'undefined') return
+
+  const prime = () => {
+    // Created here rather than waited for: a context made inside a gesture
+    // starts running, whereas one made at page load starts suspended and has
+    // to be resumed — and `resume()` outside a gesture is what silently fails.
+    const Ctor =
+      window.AudioContext ??
+      (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctor) return
+    audioContext ??= new Ctor()
+    void audioContext.resume().catch(() => {
+      // Still refused. Nothing more to do — speech falls back to the browser's
+      // own synthesis, which is subject to the same policy and will also stay
+      // quiet until the browser is satisfied.
+    })
+  }
+
+  window.addEventListener('pointerdown', prime, { once: true, capture: true })
+  window.addEventListener('keydown', prime, { once: true, capture: true })
+}
+
+/**
  * Speaks text using neural TTS, falling back to the browser.
  *
  * The browser's own voices are the reason an assistant sounds synthetic: flat

@@ -17,6 +17,8 @@ import { installDevHooks, isDevHooksEnabled } from '@/lib/devHooks'
 import { useOdinLink } from '@/adapters/odin/useOdinLink'
 import { useScreens } from '@/spatial/surfaces/useScreens'
 import { DockEdge } from '@/spatial/surfaces/DockEdge'
+import { LockScreen } from '@/auth/LockScreen'
+import { primeAudioOnGesture } from '@/brain/speech'
 
 /**
  * Top-level composition.
@@ -52,6 +54,10 @@ export function Shell() {
     if (!getDeviceProfile().supportsWebGL2) setWebglFailed(true)
     if (isSurfaceDemoEnabled()) seedDemoSurfaces()
     if (isDevHooksEnabled()) installDevHooks()
+    // Arms audio on the first interaction of any kind. Browsers refuse to play
+    // sound before one, and the first thing anyone does here is wave — which
+    // is not a gesture the browser counts.
+    primeAudioOnGesture()
   }, [setBoot])
 
   const handleBootComplete = useCallback(() => setBoot('ready'), [setBoot])
@@ -78,6 +84,10 @@ export function Shell() {
       <DockEdge connected={screens.connected} />
       <BrainConsole />
       <BootSequence onComplete={handleBootComplete} />
+      {/* Inside the Shell, not around it: presence arrives over the mind link,
+          which this component owns. Wrapping from the outside would gate the
+          very thing that decides when to open. */}
+      <LockScreen />
       {/* Test anchor: marks the point at which the OS is interactive. */}
       {boot === 'ready' && <div data-testid="os-ready" hidden />}
     </main>

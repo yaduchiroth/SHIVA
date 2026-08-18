@@ -124,6 +124,26 @@ returns the camera to neutral.
 Both voice modes call the same tools and read the same live panels, so a spoken
 question and a typed one cannot answer with different facts.
 
+### Logging in
+
+SHIVA recognises you and lets you in. The mind's face recognition already runs
+on the Mac and is already enrolled, so the browser waits for it rather than
+loading a face model of its own — camera sees you, "Welcome back, boss", the
+lock lifts. An unrecognised face is told so.
+
+**It is a greeting, not a vault**, and the three ways out reflect that. The mind
+not running opens it immediately, because nothing could ever recognise you. The
+same for a camera that will not start. And a Continue button appears after
+fifteen seconds regardless — this must never be the reason you cannot reach your
+own interface.
+
+Unlock is remembered for the tab, so a reload does not repeat the ceremony; a
+fresh tab greets you again.
+
+**The first greeting of a session may be silent.** Browsers refuse to play audio
+until the page has seen a real interaction, and waving at a camera is not one.
+Any click or keypress arms it for the rest of the session.
+
 ### Second display
 
 If a second monitor is attached, the HUD offers **Open display 2**. Grab a
