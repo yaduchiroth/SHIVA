@@ -2,8 +2,9 @@
 # SHIVA — one command for both halves.
 #
 #   ./shiva          the mind and the face, together
-#   ./shiva mind     just the Python agent
+#   ./shiva mind     just the Python agent, with its console
 #   ./shiva face     just the interface
+#   ./shiva log      follow the mind's log from another terminal
 #
 # They are separate processes on purpose. The mind holds a Claude session, a
 # microphone and a camera, and survives the interface being reloaded fifty times
@@ -13,6 +14,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 MIND="mind/.venv/bin/python"
+LOG="mind/shiva.log"
 
 start_mind() {
   if [ ! -x "$MIND" ]; then
@@ -31,15 +33,63 @@ start_face() {
 case "${1:-both}" in
   mind) start_mind ;;
   face) start_face ;;
+  log)
+    [ -f "$LOG" ] || { echo "No log yet — start it with ./shiva" >&2; exit 1; }
+    exec tail -f "$LOG"
+    ;;
   both)
     # The mind in the background, the face in front, and the mind torn down
     # with it — an orphaned agent still holding the microphone is a genuinely
     # annoying thing to discover an hour later.
     if [ -x "$MIND" ]; then
-      "$MIND" -m shiva &
+      # Detached from the terminal, and both halves of that matter.
+      #
+      # stdin from /dev/null: the mind runs a console loop on `sys.stdin`, and
+      # `next dev` reads keys too, so sharing one TTY means two readers racing
+      # for every keystroke. Worse, the Agent SDK launches the `claude` CLI as
+      # a subprocess, which inherits these descriptors — give it a terminal and
+      # it will draw its own interface over yours. That is what "the Claude
+      # Code CLI pops up when running the app" was. The console is not lost:
+      # `./shiva mind` gives you it, in a terminal that is actually its own.
+      #
+      # Output to a file rather than interleaved into this one: two processes
+      # writing unsynchronised lines to a TTY produce torn output, and the
+      # mind's startup lines — which is where you find out the camera was
+      # refused or a key is missing — are exactly the ones you cannot afford to
+      # lose in the middle of a webpack log.
+      # Job control, so the mind becomes a process group leader and its own
+      # children go with it. The Agent SDK launches the `claude` CLI as a
+      # subprocess; killing the Python process alone orphans it, which is the
+      # exact thing this teardown exists to prevent.
+      set -m
+
+      : > "$LOG"
+      "$MIND" -m shiva >>"$LOG" 2>&1 </dev/null &
       MIND_PID=$!
-      trap 'kill $MIND_PID 2>/dev/null || true' EXIT INT TERM
-      echo "mind started (pid $MIND_PID)"
+
+      # Echoed here with a prefix so you can see both halves at once, while the
+      # file keeps the unmangled copy for when something has already gone wrong.
+      #
+      # Deliberately not wrapped in a subshell, which is the obvious way to
+      # write it: that would make `tail` and `sed` grandchildren, and the
+      # `pkill -P` below only reaches direct children. As written both are
+      # children of this script and both go.
+      tail -f "$LOG" | sed $'s/^/\033[2mmind │\033[0m /' &
+
+      # Two mechanisms because they cover different things, and because the
+      # obvious single mechanism does not work.
+      #
+      # `kill -- -$MIND_PID` takes the mind and the `claude` process under it.
+      # The same trick does not work on the follower: `$!` after a pipeline is
+      # the PID of its *last* member, `sed`, while the group is led by `tail`,
+      # so the negated PID names no group at all — and `tail -f` outlives
+      # everything, holding the log open, waiting for a write from a process
+      # that is already dead. `pkill -P $$` asks the question that actually
+      # matters — what did this script start — and does not depend on how the
+      # shell happened to arrange the groups.
+      trap 'kill -- -$MIND_PID 2>/dev/null; pkill -P $$ 2>/dev/null; true' EXIT INT TERM
+      echo "mind started (pid $MIND_PID) → $LOG"
+      echo "  its console:  ./shiva mind      the full log:  ./shiva log"
     else
       echo "No mind environment — starting the interface alone."
       echo "Run ./mind/setup.sh to add the Claude brain, companions and face recognition."
@@ -47,7 +97,7 @@ case "${1:-both}" in
     npm run dev
     ;;
   *)
-    echo "usage: ./shiva [both|mind|face]" >&2
+    echo "usage: ./shiva [both|mind|face|log]" >&2
     exit 2
     ;;
 esac

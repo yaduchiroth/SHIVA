@@ -35,5 +35,9 @@ mind/data/*
 !mind/data/demo/
 mind/.venv/
 mind/.env
+# Where `./shiva` parks the mind's output so it isn't fighting `next dev` for
+# the terminal. Transcripts and tool traces end up in here — it is a log of a
+# private assistant, not build noise.
+mind/shiva.log
 __pycache__/
 *.pyc
