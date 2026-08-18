@@ -14,6 +14,7 @@ import { PerformanceGovernor } from './PerformanceGovernor'
 import { Carousel } from './carousel/Carousel'
 import { HandCursors } from './hands/HandCursors'
 import { HolographicText } from './brain/HolographicText'
+import { Orb } from './orb/Orb'
 
 /**
  * The render surface.
@@ -74,6 +75,7 @@ export function Stage() {
       <Suspense fallback={null}>
         <CameraRig reducedMotion={reducedMotion} />
         <Environment quality={quality} reducedMotion={reducedMotion} sunRef={setSun} />
+        <Orb quality={quality} reducedMotion={reducedMotion} />
         <Carousel quality={quality} reducedMotion={reducedMotion} />
         <HandCursors />
         <HolographicText />
