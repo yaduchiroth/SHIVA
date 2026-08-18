@@ -3,24 +3,22 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useSystemStore } from '@/core/store/useSystemStore'
-import type { QualityTier } from '@/lib/device'
-
-const ORDER: QualityTier[] = ['low', 'medium', 'high']
+import { decideTier } from './quality/governor'
 
 /**
  * Runtime quality governor.
  *
  * Device probing gives a starting tier, but it can only guess — a capable GPU
- * already driving two 4K displays will miss frames a benchmark wouldn't
- * predict. This measures what's actually happening and steps the tier down when
- * the budget is genuinely blown.
+ * already driving two 4K displays will miss frames a benchmark wouldn't predict.
+ * This measures what's actually happening.
  *
- * Two properties matter for it not to be worse than nothing:
- *   - Downgrades need sustained evidence. Reacting to a single slow frame would
- *     drop quality every time the GC runs.
- *   - It never upgrades past the probed tier, and re-upgrading has a long
- *     cooldown. Oscillating between tiers is far more distracting than sitting
- *     one tier lower than optimal.
+ * Measuring only. Every judgement lives in `quality/governor.ts` as a pure
+ * function, because the version that lived in this closure was untested and got
+ * it badly wrong: it treated the seconds a GPU spends compiling shaders on first
+ * render as evidence about the machine, and walked the tier from high to low
+ * before the boot sequence had finished. Since `trackingHz` is tied to the tier,
+ * that also dropped hand sampling to a third of the rate the gesture thresholds
+ * were calibrated for — so the recognizer looked broken too.
  */
 
 const SAMPLE_FRAMES = 90 // ~1.5s at 60fps
@@ -31,10 +29,6 @@ const SAMPLE_FRAMES = 90 // ~1.5s at 60fps
 const SAMPLE_SECONDS = 1.5
 const MIN_FRAMES = 4
 
-const DOWNGRADE_FPS = 42
-const UPGRADE_FPS = 58
-const UPGRADE_COOLDOWN = 12_000 // ms
-
 export function PerformanceGovernor() {
   const setPerf = useSystemStore((s) => s.setPerf)
   const setTier = useSystemStore((s) => s.setTier)
@@ -44,6 +38,9 @@ export function PerformanceGovernor() {
   const elapsed = useRef(0)
   const lastChange = useRef(0)
   const lastReport = useRef(0)
+  const slowWindows = useRef(0)
+  /** When the scene began rendering — the clock the warm-up gate runs on. */
+  const startedAt = useRef(0)
 
   useEffect(() => {
     // Report what actually got created, which may differ from what was probed.
@@ -57,6 +54,10 @@ export function PerformanceGovernor() {
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.5)
+    // Stamped on the very first frame, not on the first closed window — the
+    // window takes over a second to close, and starting the warm-up clock then
+    // would silently shift the gate later than it reads.
+    if (startedAt.current === 0) startedAt.current = performance.now()
     frames.current += 1
     elapsed.current += dt
 
@@ -77,25 +78,27 @@ export function PerformanceGovernor() {
     }
 
     const { tier, baseTier, pinned } = useSystemStore.getState()
-    const current = ORDER.indexOf(tier)
 
-    // An explicitly pinned tier is an instruction, not a suggestion — keep
-    // measuring and reporting, but never move it.
-    if (pinned) {
-      frames.current = 0
-      elapsed.current = 0
-      return
-    }
+    const decision = decideTier({
+      fps,
+      tier,
+      baseTier,
+      pinned,
+      msSinceStart: now - startedAt.current,
+      // Before the first change, measure from start — otherwise every early
+      // window would look like it had just followed one.
+      msSinceChange: now - (lastChange.current || startedAt.current),
+      slowWindows: slowWindows.current,
+    })
 
-    if (fps < DOWNGRADE_FPS && current > 0) {
-      setTier(ORDER[current - 1]!)
-      lastChange.current = now
-    } else if (
-      fps > UPGRADE_FPS &&
-      current < ORDER.indexOf(baseTier) &&
-      now - lastChange.current > UPGRADE_COOLDOWN
-    ) {
-      setTier(ORDER[current + 1]!)
+    slowWindows.current = decision.slowWindows
+
+    if (decision.action !== 'hold') {
+      setTier(decision.tier)
+      // Recorded so the HUD can say the tier was MOVED rather than merely being
+      // low — a distinction that, when missing, cost an afternoon of looking at
+      // the renderer instead of at this file.
+      useSystemStore.setState({ tierReason: decision.reason })
       lastChange.current = now
     }
 

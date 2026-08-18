@@ -28,6 +28,15 @@ interface SystemState {
   reducedMotion: boolean
   /** Tier pinned via `?quality=` — the governor stands down. */
   pinned: boolean
+  /**
+   * Why the tier last moved, or null if it never has.
+   *
+   * Surfaced in the HUD. Without it "Quality: LOW" is ambiguous between a
+   * machine that was only ever capable of low and one the governor demoted —
+   * and those have completely different causes. Recovering that distinction
+   * previously required reading the source.
+   */
+  tierReason: string | null
   telemetry: TelemetrySnapshot | null
   telemetryError: string | null
 
@@ -52,6 +61,7 @@ export const useSystemStore = create<SystemState>((set) => ({
   renderer: 'unknown',
   reducedMotion: false,
   pinned: false,
+  tierReason: null,
   telemetry: null,
   telemetryError: null,
 

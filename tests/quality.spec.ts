@@ -45,8 +45,18 @@ for (const tier of TIERS) {
     // to produce a complete frame.
     await page.waitForTimeout(tier === 'high' ? 20_000 : 8000)
 
-    // The tier must be honoured, not silently replaced by device probing.
-    await expect(page.getByTestId('hud-status')).toContainText(tier.toUpperCase())
+    // The tier must be honoured, not silently replaced by device probing — and
+    // not quietly demoted by the governor either. `?quality=` is the one tool
+    // for inspecting a specific tier, so it standing down is load-bearing.
+    //
+    // The arrow check is not decoration. A demoted tier renders as "LOW ↓ HIGH",
+    // which CONTAINS "HIGH" — so a containment assertion alone would pass while
+    // the thing it exists to catch was happening. Under software rasterisation
+    // fps sits near 2, far below the downgrade threshold, which makes this a
+    // real test of `pinned` rather than a formality.
+    const status = page.getByTestId('hud-status')
+    await expect(status).toContainText(tier.toUpperCase())
+    await expect(status, 'a pinned tier must never be moved').not.toContainText('↓')
 
     const paint = await samplePaint(page)
     expect(paint.paintedRatio, `${tier} tier renders an empty frame`).toBeGreaterThan(0.05)

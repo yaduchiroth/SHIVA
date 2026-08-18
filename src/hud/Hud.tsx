@@ -65,6 +65,7 @@ export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
   const fps = useSystemStore((s) => s.fps)
   const frameMs = useSystemStore((s) => s.frameMs)
   const tier = useSystemStore((s) => s.tier)
+  const baseTier = useSystemStore((s) => s.baseTier)
   const telemetry = useSystemStore((s) => s.telemetry)
   const telemetryError = useSystemStore((s) => s.telemetryError)
 
@@ -96,7 +97,17 @@ export function Hud({ onEnableTracking }: { onEnableTracking: () => void }) {
         </div>
         <div className="hud-rule" />
         <Row label="Render" value={`${fps} fps · ${frameMs.toFixed(1)} ms`} />
-        <Row label="Quality" value={tier.toUpperCase()} />
+        {/* A moved tier is shown as moved. "LOW" alone cannot distinguish a
+            weak machine from one the governor demoted, and those need opposite
+            responses — the second is a bug, the first is not. */}
+        <Row
+          label="Quality"
+          value={
+            tier === baseTier
+              ? tier.toUpperCase()
+              : `${tier.toUpperCase()} \u2193 ${baseTier.toUpperCase()}`
+          }
+        />
         <Row label="Input" value={inputMode === 'hand' ? 'Hand' : 'Pointer'} />
         <Row
           label="Module"
