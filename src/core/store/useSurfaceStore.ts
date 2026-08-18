@@ -246,7 +246,7 @@ export function seedDemoSurfaces(): void {
     {
       kind: 'card',
       title: 'Standing brief',
-      body: 'Three things want you today.\n\nThe Hostinger deploy is still running the old build — the governor fix is in main but has not been rebuilt.\n\nTwo API keys from this week are in a transcript and should be rotated.\n\nOdin is public. Its companion briefs are readable by anyone.',
+      body: 'Three things want you today.\n\nThe Hostinger deploy is still running the old build — the governor fix is in main but has not been rebuilt.\n\nTwo API keys from this week are in a transcript and should be rotated.\n\nSHIVA is public. Its companion briefs are readable by anyone.',
     },
     'demo-card',
   )

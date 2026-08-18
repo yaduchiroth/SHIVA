@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useMindStore } from '@/core/store/useMindStore'
 import { emit } from '@/core/events/bus'
 import { say } from '@/brain/speech'
@@ -43,13 +43,28 @@ export const GREETING_MS = 1400
  */
 const STORAGE_KEY = 'shiva:unlocked'
 
+/**
+ * Runs before paint on the client, and does nothing on the server.
+ *
+ * `useLayoutEffect` on the server both warns and is pointless, so we fall back
+ * to `useEffect` there. The one place it matters — reading the remembered
+ * unlock below — needs to happen before the browser paints, so an already-open
+ * tab never flashes the ceremony on reload.
+ */
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
 type Stage = 'waiting' | 'greeting' | 'unknown' | 'open'
 
 export function LockScreen() {
-  const [stage, setStage] = useState<Stage>(() => {
-    if (typeof window === 'undefined') return 'waiting'
-    return window.sessionStorage.getItem(STORAGE_KEY) === '1' ? 'open' : 'waiting'
-  })
+  // Always 'waiting' for the first render so the server and client agree —
+  // reading `sessionStorage` here instead would make the server emit the lock
+  // screen while an already-unlocked client emits nothing, and that structural
+  // mismatch is a hydration error. The remembered unlock is applied below, in a
+  // layout effect that runs before paint.
+  const [stage, setStage] = useState<Stage>('waiting')
+  useIsomorphicLayoutEffect(() => {
+    if (window.sessionStorage.getItem(STORAGE_KEY) === '1') setStage('open')
+  }, [])
   const [escapable, setEscapable] = useState(false)
   const link = useMindStore((s) => s.link)
   const presence = useMindStore((s) => s.presence)
