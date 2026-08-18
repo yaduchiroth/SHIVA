@@ -111,6 +111,9 @@ export function Hud({
   const reason = useGestureStore((s) => s.reason)
   const handsVisible = useGestureStore((s) => s.handsVisible)
   const inferenceMs = useGestureStore((s) => s.inferenceMs)
+  const pipelineMs = useGestureStore((s) => s.pipelineMs)
+  const lagMs = useGestureStore((s) => s.lagMs)
+  const jitterPx = useGestureStore((s) => s.jitterPx)
   const leftGesture = useGestureStore((s) => s.leftGesture)
   const rightGesture = useGestureStore((s) => s.rightGesture)
   const inputMode = useGestureStore((s) => s.inputMode)
@@ -234,6 +237,29 @@ export function Hud({
           <>
             <Row label="Hands" value={String(handsVisible)} />
             <Row label="Inference" value={`${inferenceMs.toFixed(1)} ms`} />
+            {/* The numbers that answer "does this feel right", separated from
+                inference because inference is the one nothing here controls.
+                Each is blank until it has been measured — a hand that has not
+                moved has no lag, and reporting that as 0 ms would read as a
+                result rather than as an absence.
+
+                Toned once past the point where it stops being imperceptible:
+                roughly a frame and a half of trail, and a pixel of shake. */}
+            <Row
+              label="Pipeline"
+              value={pipelineMs > 0 ? `${pipelineMs} ms` : '—'}
+              tone={pipelineMs > 80 ? 'var(--color-caution)' : undefined}
+            />
+            <Row
+              label="Trail"
+              value={lagMs > 0 ? `${lagMs} ms` : '—'}
+              tone={lagMs > 25 ? 'var(--color-caution)' : undefined}
+            />
+            <Row
+              label="Jitter"
+              value={jitterPx > 0 ? `${jitterPx.toFixed(1)} px` : '—'}
+              tone={jitterPx > 1.5 ? 'var(--color-caution)' : undefined}
+            />
             <Row label="L / R" value={`${leftGesture} / ${rightGesture}`} />
           </>
         )}

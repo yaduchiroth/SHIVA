@@ -22,12 +22,20 @@ interface GestureState {
   reason: string | null
   /** Rolling inference cost, ms — updated at ~2 Hz. */
   inferenceMs: number
+  /**
+   * End-to-end hand pipeline, measured — see `HandMetrics` for what each
+   * number is and why there are three. Updated at ~4 Hz alongside inference.
+   */
+  pipelineMs: number
+  lagMs: number
+  jitterPx: number
 
   setStatus: (status: TrackingStatus, reason?: string | null) => void
   setInputMode: (mode: InputMode) => void
   setHandsVisible: (count: number) => void
   setGesture: (hand: 'left' | 'right', gesture: GestureName) => void
   setInferenceMs: (ms: number) => void
+  setLatency: (pipelineMs: number, lagMs: number, jitterPx: number) => void
 }
 
 export const useGestureStore = create<GestureState>((set) => ({
@@ -40,6 +48,9 @@ export const useGestureStore = create<GestureState>((set) => ({
   rightGesture: 'idle',
   reason: null,
   inferenceMs: 0,
+  pipelineMs: 0,
+  lagMs: 0,
+  jitterPx: 0,
 
   setStatus: (status, reason = null) => set({ status, reason }),
   setInputMode: (inputMode) => set({ inputMode }),
@@ -47,4 +58,5 @@ export const useGestureStore = create<GestureState>((set) => ({
   setGesture: (hand, gesture) =>
     set(hand === 'left' ? { leftGesture: gesture } : { rightGesture: gesture }),
   setInferenceMs: (inferenceMs) => set({ inferenceMs }),
+  setLatency: (pipelineMs, lagMs, jitterPx) => set({ pipelineMs, lagMs, jitterPx }),
 }))

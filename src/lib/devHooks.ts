@@ -63,6 +63,15 @@ export interface ShivaDevHooks {
    */
   mind: (message: Record<string, unknown>) => boolean
   /**
+   * The measured cost of the hand pipeline — see `HandMetrics`.
+   *
+   * Lives outside the store on purpose (it is written every frame), and the
+   * HUD only shows it once tracking is genuinely active, which never happens
+   * without a camera. Without this the instrument built to answer "is the
+   * smoothing the problem" would itself be unverifiable.
+   */
+  metrics: () => { pipelineMs: number; lagMs: number; jitterPx: number }
+  /**
    * A snapshot of the state that has no other way out.
    *
    * The orb's phase and the mind's link both live in stores read only by the WebGL
@@ -132,6 +141,11 @@ export function installDevHooks(): void {
         voiceFallback: speechFallbackReason(),
       }
     },
+    metrics: () => ({
+      pipelineMs: handFrame.metrics.pipelineMs,
+      lagMs: handFrame.metrics.lagMs,
+      jitterPx: handFrame.metrics.jitterPx,
+    }),
     mind: (message) => {
       const event = parseMindEvent(message)
       if (!event) return false

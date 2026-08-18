@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { handFrame } from '@/core/hands/handFrame'
+import { PipelineMeter } from '@/core/hands/pipelineMeter'
 import { useGestureStore } from '@/core/store/useGestureStore'
 import { damp } from '@/lib/math'
 import { INSTANT, SNAP } from '@/core/config/motion'
@@ -27,10 +28,21 @@ const TRAIL_LENGTH = 22
 interface CursorProps {
   handedness: 'left' | 'right'
   color: string
+  /**
+   * Whether this cursor publishes the pipeline metrics.
+   *
+   * Exactly one does. Both cursors run the same loop, so leaving it on for
+   * both would have them writing alternate samples into a single exponential
+   * average — and when only one hand is up, the other contributes a stream of
+   * zeroes that halves every reading. A number that changes meaning depending
+   * on how many hands you are holding up is worse than no number.
+   */
+  measure: boolean
 }
 
-function Cursor({ handedness, color }: CursorProps) {
+function Cursor({ handedness, color, measure }: CursorProps) {
   const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
   const group = useRef<THREE.Group>(null)
   const core = useRef<THREE.Mesh>(null)
   const ring = useRef<THREE.Mesh>(null)
@@ -39,6 +51,12 @@ function Cursor({ handedness, color }: CursorProps) {
 
   const target = useMemo(() => new THREE.Vector3(), [])
   const trailPositions = useMemo(() => new Float32Array(TRAIL_LENGTH * 3), [])
+
+  // The instrument, and the scratch vector it is fed from. The arithmetic
+  // lives in `pipelineMeter` rather than here because it needs to be tested at
+  // a frame rate this environment cannot produce — see that file.
+  const meter = useMemo(() => new PipelineMeter(), [])
+  const projected = useMemo(() => new THREE.Vector3(), [])
 
   // Built imperatively rather than as `<line>` JSX: React's intrinsic-element
   // namespace resolves `line` to the SVG element, not three's, so the JSX form
@@ -85,12 +103,38 @@ function Cursor({ handedness, color }: CursorProps) {
 
     if (hand.visible) {
       handToWorld(target, camera, hand.position.x, hand.position.y, hand.position.z)
+
+      // Measured before the damp, not after: the question is how far the drawn
+      // cursor is from where the hand actually is, and after the damp
+      // `g.position` has already moved toward it.
+      if (measure) {
+        const m = handFrame.metrics
+        meter.transport(m, hand.timestamp, m.capturedAt, performance.now())
+        projected.copy(target).project(camera)
+        meter.motion(m, {
+          targetX: target.x,
+          targetY: target.y,
+          targetZ: target.z,
+          drawnX: g.position.x,
+          drawnY: g.position.y,
+          drawnZ: g.position.z,
+          screenX: (projected.x * size.width) / 2,
+          screenY: (projected.y * size.height) / 2,
+          dt,
+        })
+      }
+
       // Light smoothing on top of the One Euro filter: the filter tames sensor
       // jitter, this absorbs the discrete jumps between inference frames, which
       // arrive slower than the render loop.
       g.position.x = damp(g.position.x, target.x, INSTANT, dt)
       g.position.y = damp(g.position.y, target.y, INSTANT, dt)
       g.position.z = damp(g.position.z, target.z, INSTANT, dt)
+    } else if (measure) {
+      // A hand that left the frame and came back has no relationship to where
+      // it was; carrying the old position across would report the gap between
+      // them as a single enormous movement.
+      meter.reset()
     }
 
     // Pinch closes the ring and brightens the core — visible *before* the
@@ -173,8 +217,11 @@ export function HandCursors() {
 
   return (
     <>
-      <Cursor handedness="left" color="#7c9cff" />
-      <Cursor handedness="right" color="#d6e4ff" />
+      <Cursor handedness="left" color="#7c9cff" measure={false} />
+      {/* The right hand carries the measurement: it is the one `getPrimaryHand`
+          prefers, so it is the one actually driving the interface being
+          judged. */}
+      <Cursor handedness="right" color="#d6e4ff" measure />
     </>
   )
 }

@@ -34,6 +34,7 @@ export function useHandTracking() {
   const setHandsVisible = useGestureStore((s) => s.setHandsVisible)
   const setGesture = useGestureStore((s) => s.setGesture)
   const setInferenceMs = useGestureStore((s) => s.setInferenceMs)
+  const setLatency = useGestureStore((s) => s.setLatency)
 
   const landmarker = useRef<HandLandmarker | null>(null)
   const video = useRef<HTMLVideoElement | null>(null)
@@ -59,6 +60,20 @@ export function useHandTracking() {
   const lastHandCount = useRef(0)
   /** When hands were last seen — drives the fallback to pointer control. */
   const lastSeenHands = useRef(0)
+  /**
+   * When the most recent camera frame was actually captured.
+   *
+   * `video.currentTime` cannot answer this: it is a position in the media
+   * timeline, not a moment in wall-clock time, so the gap between the light
+   * hitting the sensor and the frame becoming available is invisible to it —
+   * and that gap is a real part of what "the cursor trails my hand" means.
+   * `requestVideoFrameCallback` reports both, in `performance.now()`'s
+   * timebase. `captureTime` is only populated for some sources, so
+   * `presentationTime` is the fallback: it excludes the camera's own pipeline
+   * and therefore under-reports, which is the safe direction for a number
+   * being used to decide whether smoothing is the problem.
+   */
+  const captured = useRef({ mediaTime: -1, at: 0 })
 
   const stop = useCallback(() => {
     running.current = false
@@ -195,6 +210,24 @@ export function useHandTracking() {
     setStatus('active')
     setInputMode('hand')
 
+    // Re-armed from inside itself: one callback covers one frame. Guarded on
+    // `running` so it stops with everything else, and feature-detected because
+    // Firefox does not implement it — there the capture time stays 0 and the
+    // pipeline figure reads as unavailable rather than as a wrong number.
+    const armCaptureClock = () => {
+      if (!running.current) return
+      const el = video.current
+      if (!el || typeof el.requestVideoFrameCallback !== 'function') return
+      el.requestVideoFrameCallback((_now, meta) => {
+        captured.current = {
+          mediaTime: meta.mediaTime,
+          at: meta.captureTime ?? meta.presentationTime,
+        }
+        armCaptureClock()
+      })
+    }
+    armCaptureClock()
+
     const tick = () => {
       if (!running.current) return
       raf.current = requestAnimationFrame(tick)
@@ -229,6 +262,15 @@ export function useHandTracking() {
       // Exponential average: raw per-frame timing is too noisy to display.
       handFrame.inferenceMs = handFrame.inferenceMs * 0.9 + elapsed * 0.1
       handFrame.timestamp = timestamp
+
+      // Published for the cursor to close the loop against. Only when the
+      // capture clock is describing the frame just inferred: `mediaTime` and
+      // `currentTime` are the same clock, so a mismatch means the callback has
+      // already moved on and the timestamp belongs to a different frame.
+      // Attributing one frame's capture time to another's pose would quietly
+      // report a latency that nothing ever experienced.
+      handFrame.metrics.capturedAt =
+        Math.abs(captured.current.mediaTime - el.currentTime) < 1e-3 ? captured.current.at : 0
 
       const seen = { left: false, right: false }
       const hands = result.landmarks ?? []
@@ -293,12 +335,18 @@ export function useHandTracking() {
         setGesture('left', handFrame.left.gesture)
         setGesture('right', handFrame.right.gesture)
         setInferenceMs(Number(handFrame.inferenceMs.toFixed(1)))
+        const m = handFrame.metrics
+        setLatency(
+          Number(m.pipelineMs.toFixed(0)),
+          Number(m.lagMs.toFixed(0)),
+          Number(m.jitterPx.toFixed(1)),
+        )
         lastReport.current = now
       }
     }
 
     raf.current = requestAnimationFrame(tick)
-  }, [setGesture, setHandsVisible, setInferenceMs, setInputMode, setStatus])
+  }, [setGesture, setHandsVisible, setInferenceMs, setLatency, setInputMode, setStatus])
 
   useEffect(() => stop, [stop])
 
