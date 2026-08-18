@@ -14,7 +14,7 @@ import { HandDebugOverlay } from '@/hud/HandDebugOverlay'
 import { BrainConsole } from '@/hud/BrainConsole'
 import { seedDemoSurfaces } from '@/core/store/useSurfaceStore'
 import { installDevHooks, isDevHooksEnabled } from '@/lib/devHooks'
-import { useOdinLink } from '@/adapters/odin/useOdinLink'
+import { useMindLink } from '@/adapters/mind/useMindLink'
 import { useScreens } from '@/spatial/surfaces/useScreens'
 import { DockEdge } from '@/spatial/surfaces/DockEdge'
 import { LockScreen } from '@/auth/LockScreen'
@@ -42,9 +42,9 @@ export function Shell() {
   // stands down when input mode flips.
   usePointerFallback(true)
   useAudioEngine()
-  // Links to Odin when it is reachable; a no-op on a hosted page, where the
+  // Links to the mind when it is reachable; a no-op on a hosted page, where the
   // browser will not open an insecure socket from a secure origin.
-  useOdinLink()
+  useMindLink()
   // Owns the link to the display window, and lets a grabbed surface be thrown
   // at it. A no-op when there is no second display and nothing is grabbed.
   const screens = useScreens()

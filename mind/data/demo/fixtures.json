@@ -1,0 +1,92 @@
+{
+  "company": "Kailash Group",
+  "ceo": "David",
+
+  "kpis": {
+    "revenue_yesterday": "$412,800",
+    "revenue_vs_target": "+6.2% vs target",
+    "deals_closed_yesterday": [
+      {"client": "Meridian Logistics", "value": "$780,000", "type": "3-year platform license"},
+      {"client": "Al Noor Retail", "value": "$95,000", "type": "expansion order"}
+    ],
+    "payments_received": "$268,400 (4 invoices)",
+    "pending_approvals_count": 7,
+    "employees_on_leave": ["Sara K. (annual)", "Tom W. (sick)", "Priya M. (annual)"],
+    "critical_complaints": [
+      {"customer": "Falcon Foods", "issue": "Integration downtime 6h Tuesday — escalated to L2, fix deployed, awaiting confirmation"}
+    ],
+    "deliveries_delayed": [
+      {"order": "PO-4471 (Gulf Medical)", "eta_slip": "2 days", "reason": "customs hold"}
+    ],
+    "competitor_news": "Northwind AI announced a UAE data-center partnership yesterday; coverage in Gulf Business.",
+    "decisions_needed": [
+      "Sign-off on Q3 hiring plan (Finance flagged 2 headcount over budget)",
+      "Approve revised Meridian implementation timeline",
+      "Choose venue for the November partner summit"
+    ]
+  },
+
+  "inbox": {
+    "unread_total": 382,
+    "folders": {"Urgent": 4, "Need Approval": 2, "Delegate": 18, "Finance": 12, "Customers": 15, "Ignore": 280},
+    "urgent": [
+      {"from": "Elena Marsh — Meridian Logistics", "subject": "Implementation timeline — need your confirmation today", "preview": "David, our board meets Thursday; we need the revised go-live date confirmed…"},
+      {"from": "Rashid Al Farsi — Gulf Medical", "subject": "PO-4471 delay — escalation", "preview": "Two days slip is workable only if the second shipment is guaranteed…"},
+      {"from": "Anna Lindqvist — CFO", "subject": "Q3 hiring plan needs sign-off before payroll lock", "preview": "Payroll locks Friday. Two roles exceed the envelope by $38k total…"},
+      {"from": "Legal — Hartmann & Cole", "subject": "Vendor contract clause 11.3 — response due", "preview": "Their counsel proposed a liability cap change we advise against accepting…"}
+    ],
+    "client_reply": {
+      "to": "Elena Marsh — Meridian Logistics",
+      "subject": "Re: Implementation timeline — need your confirmation today",
+      "body": "Elena,\n\nConfirmed — go-live moves to 15 September, with the pilot warehouse cut over on 1 September as discussed. I've attached the revised implementation plan with the updated milestone table; your team keeps the same integration contacts throughout.\n\nIf the board needs anything further for Thursday, Priya can walk them through the technical annex on a call Wednesday.\n\nBest,\nDavid",
+      "attachment": "Meridian_Implementation_Plan_v3.pdf",
+      "followup": "Follow-up scheduled: Wednesday 10:00 — pre-board call slot held with Priya"
+    }
+  },
+
+  "approvals": [
+    {"id": 1, "type": "Expense", "item": "Team offsite — engineering", "amount": 6400, "category": "operations", "requester": "Priya M."},
+    {"id": 2, "type": "Purchase Order", "item": "Replacement rack servers (2)", "amount": 8900, "category": "it", "requester": "Tom W."},
+    {"id": 3, "type": "Expense", "item": "Gulf Business full-page feature", "amount": 7500, "category": "marketing", "requester": "Lina S."},
+    {"id": 4, "type": "Leave Request", "item": "Unpaid leave extension — 1 week", "amount": 0, "category": "hr", "requester": "Omar D."},
+    {"id": 5, "type": "Vendor Contract", "item": "Cleaning services renewal (annual)", "amount": 21600, "category": "facilities", "requester": "Facilities"},
+    {"id": 6, "type": "Purchase Order", "item": "Trade-show booth deposit — GITEX", "amount": 9800, "category": "marketing", "requester": "Lina S."},
+    {"id": 7, "type": "Expense", "item": "Customer success travel — Riyadh", "amount": 3100, "category": "sales", "requester": "Yusuf A."}
+  ],
+
+  "crisis": {
+    "headline": "Shipment at risk: $850,000 may miss today's deadline",
+    "shipment": "SO-2291 — 14 pallets, industrial controllers",
+    "customer": "Meridian Logistics (annual value $2.4M)",
+    "reason": "Carrier's linehaul truck failed inspection at Jebel Ali; rebooking queue is 9 hours",
+    "affected": "Meridian's Dammam DC go-live; contractual delivery window closes 18:00 today",
+    "revenue_impact": "$850,000 invoice slips to next quarter + 2% late-delivery penalty ($17,000)",
+    "alternative": "Al Sharqi Freight has a partial truck available 13:30 — covers 9 of 14 pallets today; remainder tomorrow 08:00",
+    "inventory": "3 of the 5 remaining pallet SKUs are in the Dubai depot and could ship direct",
+    "recommendation": "Split the shipment: 9 pallets via Al Sharqi at 13:30, 3 SKUs direct from Dubai depot, remainder tomorrow morning — keeps Meridian's go-live on schedule",
+    "customer_email": "Subject: SO-2291 — delivery update and recovery plan\n\nElena,\n\nWe've hit a carrier inspection issue at Jebel Ali affecting today's delivery. We're splitting the shipment: 9 pallets arrive within today's window via an alternate carrier, 3 critical SKUs ship direct from our Dubai depot, and the remainder lands by 08:00 tomorrow. Your Dammam go-live stays on schedule. I'll confirm the first arrival by 15:00.\n\n— David",
+    "supplier_email": "Subject: URGENT — partial truck 13:30, SO-2291\n\nPlease confirm the 13:30 partial for 9 pallets ex-Jebel Ali to Dammam DC, direct tip, POD required tonight. Rate as per framework agreement. Confirm within 30 minutes.\n\n— Kailash Group Logistics"
+  },
+
+  "montage": [
+    {"tool": "inbox_triage",    "detail": "overnight: 74 emails processed — 61 answered, 9 delegated, 4 held"},
+    {"tool": "calendar_sync",   "detail": "resolved 2 conflicts; moved internal review to Thursday"},
+    {"tool": "approve",         "detail": "PO-4492 office supplies $1,840 — within policy, approved"},
+    {"tool": "vendor_followup", "detail": "Al Sharqi Freight — POD received, penalty clause waived"},
+    {"tool": "interview_sched", "detail": "3 candidate interviews booked for the data-engineer role"},
+    {"tool": "project_watch",   "detail": "Dammam go-live: day 1 green; 2 tickets auto-routed to L2"},
+    {"tool": "crm_update",      "detail": "Meridian record updated — recovery accepted, NPS ping scheduled"},
+    {"tool": "kpi_monitor",     "detail": "daily revenue $391k (-5% DoD, within band); cash runway unchanged"},
+    {"tool": "report_draft",    "detail": "board report v0.9 drafted — awaiting your review flag"},
+    {"tool": "escalation",      "detail": "HELD FOR CEO: legal risk — vendor clause 11.3 deadline tomorrow"}
+  ],
+
+  "day_stats": {
+    "meetings_attended": 6,
+    "requests_approved": 14,
+    "deals_closed": "3 deals worth $1.8M",
+    "emails_handled": "217 handled, 4 escalated",
+    "time_saved": "approximately 2 hours 47 minutes",
+    "tomorrow": "Only two decisions need you tomorrow: the Q3 hiring plan, and the partner-summit venue."
+  }
+}

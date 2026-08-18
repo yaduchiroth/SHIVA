@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useOdinStore } from '@/core/store/useOdinStore'
+import { useMindStore } from '@/core/store/useMindStore'
 import { emit } from '@/core/events/bus'
 import { say } from '@/brain/speech'
 import { isLockForced } from '@/lib/device'
@@ -51,8 +51,8 @@ export function LockScreen() {
     return window.sessionStorage.getItem(STORAGE_KEY) === '1' ? 'open' : 'waiting'
   })
   const [escapable, setEscapable] = useState(false)
-  const link = useOdinStore((s) => s.link)
-  const presence = useOdinStore((s) => s.presence)
+  const link = useMindStore((s) => s.link)
+  const presence = useMindStore((s) => s.presence)
   // `?lock=1` holds the ceremony open with no mind to drive it, so it can be
   // seen and tested on a machine that has none.
   const [forced] = useState(isLockForced)

@@ -1,5 +1,12 @@
 # Deploying SHIVA to Hostinger
 
+> **A hosted SHIVA has no mind behind it.** The Python half runs on your Mac and
+> binds `127.0.0.1`, and a browser will not open an insecure socket from an
+> HTTPS page — so a deployed SHIVA is the interface, the orb, the gestures and
+> the AR surfaces, answered by Gemini rather than by Claude, with no companions
+> and none of the Mac-bound tools. That is a genuine fallback, not a broken
+> install. See [MIND.md](MIND.md).
+
 Two routes, both verified here. **Route A** is hPanel's automatic Node.js
 installer — pick the repo, it clones and installs. **Route B** uploads a
 pre-built bundle and is the fallback for when the build cannot run on the host.

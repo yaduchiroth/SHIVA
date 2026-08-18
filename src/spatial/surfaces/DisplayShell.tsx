@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { openScreenLink, type ScreenLink, type ScreenMessage } from '@/core/screens/channel'
 import { useSurfaceStore } from '@/core/store/useSurfaceStore'
-import { OdinClient, odinUrl } from '@/adapters/odin/client'
-import { publishFrame } from '@/adapters/odin/streams'
+import { MindClient, mindUrl } from '@/adapters/mind/client'
+import { publishFrame } from '@/adapters/mind/streams'
 import { SurfaceBody } from './content/SurfaceBody'
 
 /**
@@ -17,7 +17,7 @@ import { SurfaceBody } from './content/SurfaceBody'
  * second monitor is for.
  *
  * It keeps its own connection to the mind, but subscribed to `camera` and
- * `screen` only. That is the entire reason `OdinClient.setKinds` exists: a live
+ * `screen` only. That is the entire reason `MindClient.setKinds` exists: a live
  * feed is pixels arriving ten times a second and cannot travel over the window
  * channel, while every other event must NOT be handled here or each report the
  * mind published would appear on both walls at once.
@@ -43,7 +43,7 @@ export function DisplayShell() {
   }, [])
 
   useEffect(() => {
-    const url = odinUrl()
+    const url = mindUrl()
     if (
       typeof window !== 'undefined' &&
       window.location.protocol === 'https:' &&
@@ -51,7 +51,7 @@ export function DisplayShell() {
     ) {
       return
     }
-    const client = new OdinClient({
+    const client = new MindClient({
       url,
       // Frames only. Anything else arriving here would duplicate the main
       // window's wall onto this one.

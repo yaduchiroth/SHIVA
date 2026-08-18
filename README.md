@@ -2,19 +2,33 @@
 
 A futuristic personal agentic AI — industrial spatial computing interface.
 
-> **Status: Phase 4 — the avatar, the wall, and Odin.**
-> An orb of neurons and protons at the centre of the ring, reacting to gestures
-> and to whatever the brain is doing. Floating AR surfaces carrying real HTML —
-> reports, charts, embedded pages, live feeds — that hands can scroll and press.
-> And a link to **Odin**, which brings the Claude brain, the companions and the
-> whole Mac-bound toolset when you are at your desk. See **[ODIN.md](ODIN.md)**.
+> **Status: one system, two halves.**
 >
-> Earlier phases still stand: the spatial shell, the Gemini brain, live system
-> diagnostics and weather with no credentials, GitHub projects with a token.
-> Schedule, Markets and Reach declare themselves unconnected rather than
-> inventing figures.
+> The **face** is this app: an orb of neurons and protons that parts around your
+> hands, floating AR surfaces carrying real HTML that you can scroll, press and
+> throw at a second monitor, and a lock screen that lifts when SHIVA sees you.
+>
+> The **mind** is `mind/`: Python, Claude with five dispatchable companions,
+> face recognition, memory and watchers. It was a separate project called Odin;
+> its HUD is gone and the whole pantheon has been renamed. See
+> **[MIND.md](MIND.md)**.
+>
+> Everything below covers the face. It runs on its own with no credentials at
+> all — the Gemini brain, live system diagnostics and local weather — and gains
+> Claude, the companions and the Mac-bound toolset when the mind is running.
 
 ## Quick start
+
+```bash
+./mind/setup.sh     # once
+./shiva             # the mind and the face, together
+```
+
+`./shiva face` starts the interface alone, which is all you need to look at it.
+Everything below covers the interface; **[MIND.md](MIND.md)** covers the Python
+half — the Claude brain, the Gana, and the face recognition that lets you in.
+
+From a fresh clone, the interface alone:
 
 ```bash
 git clone -b claude/personal-agentic-ai-ny97hn https://github.com/yaduchiroth/SHIVA.git
@@ -317,8 +331,8 @@ All opt-in, all off by default, so none of them costs anything in normal use.
 | ------------------ | ----------------------------------------------------------------------------- |
 | `?quality=low`     | Pins the render tier and stops the governor moving it. Also `medium`, `high`. |
 | `?surfaces=demo`   | Seeds one AR surface of every kind, with no brain involved.                   |
-| `?dev=1`           | Exposes `window.__shiva` — place a hand, inject an Odin event, read state.    |
-| `?odin=off`        | Suppresses the Odin connection attempt.                                       |
+| `?dev=1`           | Exposes `window.__shiva` — place a hand, inject a mind event, read state.     |
+| `?mind=off`        | Suppresses the mind connection attempt.                                       |
 | `?capture=1`       | Preserves the drawing buffer so the canvas can be screenshotted.              |
 | `?debug=hands`     | Live tracking inspector.                                                      |
 | `?sensitivity=low` | Widens the gesture dead zones. Also `normal`, `high`.                         |
@@ -336,7 +350,10 @@ src/spatial/            R3F stage, environment, carousel, physics, effects
 src/spatial/hands/      MediaPipe loop, gesture recognizer, cursors, DOM bridge
 src/spatial/orb/        the avatar — shell, neurons, protons, glyphs, companions
 src/spatial/surfaces/   AR screens: layout, frame, and one renderer per kind
-src/adapters/odin/      Odin's bus protocol, client, and event handling
+src/adapters/mind/      the mind's bus protocol, client, and event handling
+src/auth/               the lock screen, opened by face recognition
+src/core/screens/       the second display: placement and the window channel
+mind/                   the mind — Python, Claude, the Gana, face recognition
 src/spatial/brain/      holographic particle text
 src/hud/                boot sequence, HUD clusters, brain console, tracking inspector
 src/brain/              brain client, speech recognition and synthesis

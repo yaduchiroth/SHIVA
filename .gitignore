@@ -27,3 +27,13 @@ blob-report/
 
 # Deploy archive — contains .env.local when built with credentials.
 shiva-deploy.tar.gz
+
+# ─── The mind ───────────────────────────────────────────────────────────────
+# Personal data: memories, face embeddings, voiceprints, downloaded models.
+# None of it can be regenerated and none of it belongs in a repository.
+mind/data/*
+!mind/data/demo/
+mind/.venv/
+mind/.env
+__pycache__/
+*.pyc

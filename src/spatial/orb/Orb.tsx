@@ -176,7 +176,7 @@ export function Orb({ quality, reducedMotion }: Props) {
         seed={SEED + 3}
       />
       <OrbCore reducedMotion={reducedMotion} />
-      {/* Odin's roster, when it is linked. Renders nothing otherwise. */}
+      {/* The mind's roster, when it is linked. Renders nothing otherwise. */}
       <Companions />
     </group>
   )

@@ -4,11 +4,11 @@ import { handFrame } from '@/core/hands/handFrame'
 import { useGestureStore } from '@/core/store/useGestureStore'
 import { useSurfaceStore, type SurfaceContent } from '@/core/store/useSurfaceStore'
 import { driveDomPointer, pointerBridgeState } from '@/spatial/hands/pointerBridge'
-import { parseOdinEvent } from '@/adapters/odin/protocol'
-import { useOdinStore } from '@/core/store/useOdinStore'
+import { parseMindEvent } from '@/adapters/mind/protocol'
+import { useMindStore } from '@/core/store/useMindStore'
 import { useBrainStore } from '@/core/store/useBrainStore'
 import { speechFallbackReason, speechProvider } from '@/brain/speech'
-import { handleOdinEvent } from '@/adapters/odin/useOdinLink'
+import { handleMindEvent } from '@/adapters/mind/useMindLink'
 import type { GestureName } from '@/core/types'
 
 /**
@@ -52,26 +52,26 @@ export interface ShivaDevHooks {
     list: () => { id: string; kind: string }[]
   }
   /**
-   * Feeds a raw Odin wire message in as though it had arrived on the socket.
+   * Feeds a raw the mind wire message in as though it had arrived on the socket.
    *
-   * Odin is a Python process on a Mac; there is neither one nor a Mac in CI.
+   * The mind is a Python process on a Mac; there is neither one nor a Mac in CI.
    * Everything downstream of the socket — the parser's coercions, the surfaces
    * an event creates, the companion orbs it lights — is testable without one,
-   * and this is how. It goes through `parseOdinEvent` rather than around it, so
-   * a test can hand it the same malformed payloads a real Odin occasionally
+   * and this is how. It goes through `parseMindEvent` rather than around it, so
+   * a test can hand it the same malformed payloads a real the mind occasionally
    * sends.
    */
-  odin: (message: Record<string, unknown>) => boolean
+  mind: (message: Record<string, unknown>) => boolean
   /**
    * A snapshot of the state that has no other way out.
    *
-   * The orb's phase and Odin's link both live in stores read only by the WebGL
+   * The orb's phase and the mind's link both live in stores read only by the WebGL
    * scene, which the DOM cannot see into. Without this, "did that event
    * actually change anything" is unanswerable from a test and from a console.
    */
   state: () => {
     phase: string
-    odin: string
+    mind: string
     link: string
     companions: { slug: string; state: string }[]
     /** Which voice last spoke, and why it was not the first choice. */
@@ -122,20 +122,20 @@ export function installDevHooks(): void {
     pointer: driveDomPointer,
     bridge: pointerBridgeState,
     state: () => {
-      const odin = useOdinStore.getState()
+      const mind = useMindStore.getState()
       return {
         phase: useBrainStore.getState().phase,
-        odin: odin.state,
-        link: odin.link.status,
-        companions: odin.companions.map((c) => ({ slug: c.slug, state: c.state })),
+        mind: mind.state,
+        link: mind.link.status,
+        companions: mind.companions.map((c) => ({ slug: c.slug, state: c.state })),
         voice: speechProvider(),
         voiceFallback: speechFallbackReason(),
       }
     },
-    odin: (message) => {
-      const event = parseOdinEvent(message)
+    mind: (message) => {
+      const event = parseMindEvent(message)
       if (!event) return false
-      handleOdinEvent(event)
+      handleMindEvent(event)
       return true
     },
     surfaces: {

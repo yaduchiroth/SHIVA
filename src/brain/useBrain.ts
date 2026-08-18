@@ -8,7 +8,7 @@ import { useSystemStore } from '@/core/store/useSystemStore'
 import { getModule } from '@/core/config/modules'
 import { emit } from '@/core/events/bus'
 import { SseFramer, sseData } from '@/lib/sse'
-import { odinLinked, sendToOdin } from '@/adapters/odin/link'
+import { mindLinked, sendToMind } from '@/adapters/mind/link'
 import { executeTool } from './executeTool'
 
 /**
@@ -182,19 +182,19 @@ export function useBrain() {
       setError(null)
       setPhase('thinking')
 
-      // Odin first, when it is there.
+      // the mind first, when it is there.
       //
-      // Odin runs Claude with the companions and the whole Mac-bound toolset;
+      // the mind runs Claude with the companions and the whole Mac-bound toolset;
       // Gemini behind /api/brain is what answers when the desk is not. Routing
       // here rather than at the call sites means every path — typed, wake word,
       // voice socket — follows the same rule and cannot drift.
       //
-      // The reply does not come back from this call. Odin answers
+      // The reply does not come back from this call. The mind answers
       // asynchronously over the bus as transcript and state events, which
-      // `useOdinLink` feeds into the same store the streaming path writes to.
-      // So there is nothing to await and nothing to commit: phase is Odin's to
+      // `useMindLink` feeds into the same store the streaming path writes to.
+      // So there is nothing to await and nothing to commit: phase is the mind's to
       // report, and the console renders whatever arrives.
-      if (odinLinked() && sendToOdin(text)) return
+      if (mindLinked() && sendToMind(text)) return
 
       try {
         // At most one follow-up. A read tool answers in a single extra turn,

@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * Live JPEG frames from Odin, kept out of React entirely.
+ * Live JPEG frames from the mind, kept out of React entirely.
  *
- * Odin sends camera and screen frames as base64 JPEG inside JSON, several
+ * The mind sends camera and screen frames as base64 JPEG inside JSON, several
  * times a second. Putting those in the surface store would be the obvious
  * thing and the wrong one: every frame would change the store's identity, which
  * re-renders the whole wall — every surface, its frame, its DOM — five to ten
@@ -20,7 +20,7 @@ export type StreamSource = 'camera' | 'screen'
 export interface StreamFrame {
   /** A complete `data:` URL, ready to assign to an img. */
   src: string
-  /** Faces Heimdall recognised in this frame. Empty for screen shares. */
+  /** Faces Nandi recognised in this frame. Empty for screen shares. */
   names: string[]
   at: number
 }

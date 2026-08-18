@@ -89,7 +89,7 @@ export function executeTool(name: string, args: Record<string, unknown>): string
     case 'show_chart': {
       // Models are inconsistent about this key — values, data and y all turn up
       // — and a chart that silently renders nothing because the array was
-      // called the wrong thing is a bad failure. Odin's own HUD tool normalises
+      // called the wrong thing is a bad failure. The mind's own HUD tool normalises
       // the same three; this matches it deliberately.
       const raw = Array.isArray(args.series) ? (args.series as Record<string, unknown>[]) : []
       const series: ChartSeries[] = raw

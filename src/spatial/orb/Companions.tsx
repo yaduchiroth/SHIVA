@@ -3,29 +3,29 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useOdinStore, type CompanionRuntime } from '@/core/store/useOdinStore'
+import { useMindStore, type CompanionRuntime } from '@/core/store/useMindStore'
 import { damp } from '@/lib/math'
 import { MAX_STEP, SETTLE } from '@/core/config/motion'
 import { firePulse, orbDrive } from './orbDrive'
 import { labelSprite } from './labelSprite'
 
 /**
- * The Æsir, orbiting.
+ * The Gana, orbiting.
  *
- * Odin's roster — Thor, Freyja, Kvasir and the rest, each a markdown file with
+ * The mind's roster — Ganesha, Lakshmi, Brihaspati and the rest, each a markdown file with
  * its own brief, model and colour — becomes a small orb circling the main one.
- * When Odin dispatches one, a beam runs out to it and it brightens; when the
+ * When the mind dispatches one, a beam runs out to it and it brightens; when the
  * companion reports back, the beam retracts. The point is that delegation stops
  * being something buried in a log and becomes something you watch happen.
  *
- * Ported from Odin's own `hud/world/orbs.js` and `beams.js`, which had the
+ * Ported from the mind's own `hud/world/orbs.js` and `beams.js`, which had the
  * behaviour right. What changed is that a companion is four objects here rather
  * than six, the beam is a line rather than a mesh, and the whole roster costs
  * about five draw calls per companion instead of a scene graph per companion —
  * these sit alongside the avatar orb, and its budget is already spent.
  */
 
-/** Golden angle, for spreading orbits that Odin did not give an explicit phase. */
+/** Golden angle, for spreading orbits that the mind did not give an explicit phase. */
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
 
 /**
@@ -56,7 +56,7 @@ interface OrbitParams {
 function orbitFor(companion: CompanionRuntime, index: number): OrbitParams {
   const o = companion.orbit
   return {
-    // Odin's companion files may specify an orbit; when they do not, a golden
+    // the mind's companion files may specify an orbit; when they do not, a golden
     // angle spread is what stops two companions sitting on top of each other.
     radius: clampRadius(o.radius ?? MIN_R + (index % 3) * 0.22),
     incline: ((o.incline ?? index * 17 - 25) * Math.PI) / 180,
@@ -68,7 +68,7 @@ function orbitFor(companion: CompanionRuntime, index: number): OrbitParams {
 const clampRadius = (r: number): number => Math.min(MAX_R, Math.max(MIN_R, r))
 
 export function Companions() {
-  const companions = useOdinStore((s) => s.companions)
+  const companions = useMindStore((s) => s.companions)
   if (companions.length === 0) return null
   return (
     <group>

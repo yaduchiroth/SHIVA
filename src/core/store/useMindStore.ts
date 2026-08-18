@@ -1,11 +1,11 @@
 'use client'
 
 import { create } from 'zustand'
-import type { LinkStatus } from '@/adapters/odin/client'
-import type { CompanionSpec, CompanionState, DeviceSpec, OdinState } from '@/adapters/odin/protocol'
+import type { LinkStatus } from '@/adapters/mind/client'
+import type { CompanionSpec, CompanionState, DeviceSpec, MindState } from '@/adapters/mind/protocol'
 
 /**
- * What Odin is currently doing, as far as SHIVA can see.
+ * What the mind is currently doing, as far as SHIVA can see.
  *
  * Discrete, low-frequency state — the roster changes when a companion file is
  * edited, presence when someone walks in front of the camera — so it belongs in
@@ -24,20 +24,20 @@ export interface CompanionRuntime extends CompanionSpec {
 /** Bounded: this is a scrolling log, not a record. */
 const MAX_LOG = 60
 
-interface OdinStoreState {
+interface MindStoreState {
   link: LinkStatus
-  /** Odin's conversational state, which drives the orb's colour when linked. */
-  state: OdinState
-  /** Whether Odin is awake or has been told to stand down. */
+  /** The mind's conversational state, which drives the orb's colour when linked. */
+  state: MindState
+  /** Whether the mind is awake or has been told to stand down. */
   awake: boolean
-  /** Who Heimdall last recognised, and whether it knew them. */
+  /** Who Nandi last recognised, and whether it knew them. */
   presence: { name: string; known: boolean } | null
   companions: CompanionRuntime[]
   devices: DeviceSpec[]
   log: { text: string; at: number }[]
 
   setLink: (link: LinkStatus) => void
-  setState: (state: OdinState) => void
+  setState: (state: MindState) => void
   setAwake: (awake: boolean) => void
   setPresence: (name: string, known: boolean) => void
   setRoster: (items: CompanionSpec[]) => void
@@ -52,7 +52,7 @@ interface OdinStoreState {
 
 const idle = {
   link: { status: 'off' } as LinkStatus,
-  state: 'idle' as OdinState,
+  state: 'idle' as MindState,
   awake: true,
   presence: null,
   companions: [] as CompanionRuntime[],
@@ -60,7 +60,7 @@ const idle = {
   log: [] as { text: string; at: number }[],
 }
 
-export const useOdinStore = create<OdinStoreState>((set) => ({
+export const useMindStore = create<MindStoreState>((set) => ({
   ...idle,
 
   setLink: (link) => set({ link }),
@@ -70,7 +70,7 @@ export const useOdinStore = create<OdinStoreState>((set) => ({
 
   setRoster: (items) =>
     set((s) => {
-      // Runtime state survives a roster refresh. Odin re-emits the roster
+      // Runtime state survives a roster refresh. The mind re-emits the roster
       // whenever a companion file changes, and resetting every orb to dormant
       // mid-errand would make working companions look idle while they are
       // still out.

@@ -3,14 +3,14 @@
 > **This document answered a question that has since been settled differently.**
 >
 > It was written to help lift SHIVA's input and presentation layer into an AI
-> you already had. That AI turned out to be Odin, and the merge went the other
-> way: Odin keeps its Python brain and tools, and SHIVA became its interface
-> over Odin's own WebSocket bus. Nothing was extracted. See **[ODIN.md](ODIN.md)**
+> you already had. That AI turned out to be the mind, and the merge went the other
+> way: the mind keeps its Python brain and tools, and SHIVA became its interface
+> over the mind's own WebSocket bus. Nothing was extracted. See **[MIND.md](MIND.md)**
 > for how the two now fit together.
 >
 > What follows is still accurate about SHIVA's internals, and still the right
 > document if you ever want to take the hand-tracking layer somewhere else.
-> The event bus it names as the seam is the same one the Odin link publishes
+> The event bus it names as the seam is the same one the the mind link publishes
 > into, so the description of that seam holds exactly.
 
 Everything built so far, organised around one question: **what do you lift out of

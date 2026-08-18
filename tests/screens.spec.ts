@@ -188,7 +188,7 @@ test.describe('the dock threshold', () => {
 test.describe('the handoff between windows', () => {
   test('a surface dragged to the edge arrives on the display', async ({ context }) => {
     const main = await context.newPage()
-    await main.goto('/?quality=low&capture=1&dev=1&odin=off&surfaces=demo')
+    await main.goto('/?quality=low&capture=1&dev=1&mind=off&surfaces=demo')
     await main.waitForSelector('[data-testid="os-ready"]', { state: 'attached', timeout: 90_000 })
     await main.waitForFunction(() => Boolean(window.__shiva), null, { timeout: 30_000 })
 
@@ -252,7 +252,7 @@ test.describe('the handoff between windows', () => {
     // The threshold has to be a real boundary. Without this test, a bug that
     // sent every dragged surface across would look like the feature working.
     const main = await context.newPage()
-    await main.goto('/?quality=low&capture=1&dev=1&odin=off&surfaces=demo')
+    await main.goto('/?quality=low&capture=1&dev=1&mind=off&surfaces=demo')
     await main.waitForSelector('[data-testid="os-ready"]', { state: 'attached', timeout: 90_000 })
     await main.waitForFunction(() => Boolean(window.__shiva), null, { timeout: 30_000 })
 
@@ -294,7 +294,7 @@ test.describe('the handoff between windows', () => {
   test('nothing is sent when no display window is open', async ({ page }) => {
     // Dragging to the edge with nowhere to send it must be a no-op, not a
     // surface that vanishes into a channel nobody is listening on.
-    await page.goto('/?quality=low&capture=1&dev=1&odin=off&surfaces=demo')
+    await page.goto('/?quality=low&capture=1&dev=1&mind=off&surfaces=demo')
     await page.waitForSelector('[data-testid="os-ready"]', { state: 'attached', timeout: 90_000 })
     await page.waitForFunction(() => Boolean(window.__shiva), null, { timeout: 30_000 })
 

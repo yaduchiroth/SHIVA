@@ -2,7 +2,7 @@
   "name": "shiva",
   "version": "0.1.0",
   "private": true,
-  "description": "SHIVA — a futuristic personal agentic AI. Phase 1: Industrial Spatial OS.",
+  "description": "SHIVA — a personal agentic AI. A spatial interface, and a Python mind that runs Claude.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -18,7 +18,10 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "mind": "mind/.venv/bin/python -m shiva",
+    "face": "next dev",
+    "rebrand:check": "node scripts/check-rebrand.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.0.1",

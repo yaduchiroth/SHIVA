@@ -6,8 +6,8 @@ import { useSystemStore } from '@/core/store/useSystemStore'
 import { useGestureStore } from '@/core/store/useGestureStore'
 import { useSpatialStore, activeModuleIndex } from '@/core/store/useSpatialStore'
 import type { TrackingStatus } from '@/core/types'
-import { useOdinStore } from '@/core/store/useOdinStore'
-import type { LinkStatus } from '@/adapters/odin/client'
+import { useMindStore } from '@/core/store/useMindStore'
+import type { LinkStatus } from '@/adapters/mind/client'
 import type { Screens } from '@/spatial/surfaces/useScreens'
 import { useSurfaceStore } from '@/core/store/useSurfaceStore'
 
@@ -68,10 +68,10 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
  * What the link row says, per status.
  *
  * "Blocked" is its own word rather than an error because it is not one: a
- * secure page cannot open an insecure socket, Odin may be running perfectly,
+ * secure page cannot open an insecure socket, the mind may be running perfectly,
  * and calling it offline would send someone to restart a healthy process.
  */
-const ODIN_COPY: Record<LinkStatus['status'], string> = {
+const MIND_COPY: Record<LinkStatus['status'], string> = {
   off: 'Off',
   connecting: 'Linking…',
   live: 'Linked',
@@ -79,7 +79,7 @@ const ODIN_COPY: Record<LinkStatus['status'], string> = {
   blocked: 'Blocked (HTTPS)',
 }
 
-const ODIN_TONE: Record<LinkStatus['status'], string | undefined> = {
+const MIND_TONE: Record<LinkStatus['status'], string | undefined> = {
   off: undefined,
   connecting: 'var(--color-caution)',
   live: 'var(--color-nominal)',
@@ -96,9 +96,9 @@ export function Hud({
 }) {
   const [displayNote, setDisplayNote] = useState<string | null>(null)
   const surfaceFocused = useSurfaceStore((s) => s.focused !== null)
-  const odinLink = useOdinStore((s) => s.link)
-  const companionCount = useOdinStore((s) => s.companions.length)
-  const working = useOdinStore((s) => s.companions.filter((c) => c.state === 'working').length)
+  const mindLink = useMindStore((s) => s.link)
+  const companionCount = useMindStore((s) => s.companions.length)
+  const working = useMindStore((s) => s.companions.filter((c) => c.state === 'working').length)
   const clock = useClock()
   const fps = useSystemStore((s) => s.fps)
   const frameMs = useSystemStore((s) => s.frameMs)
@@ -161,10 +161,10 @@ export function Hud({
           tone={focused !== null ? 'var(--color-signal)' : undefined}
         />
         {/* Only shown once the link has been attempted. On a hosted page it
-            never is, and a permanent "ODIN — OFF" would read as a fault rather
+            never is, and a permanent "MIND — OFF" would read as a fault rather
             than as a deployment that was never meant to reach a laptop. */}
-        {odinLink.status !== 'off' ? (
-          <Row label="Odin" value={ODIN_COPY[odinLink.status]} tone={ODIN_TONE[odinLink.status]} />
+        {mindLink.status !== 'off' ? (
+          <Row label="Mind" value={MIND_COPY[mindLink.status]} tone={MIND_TONE[mindLink.status]} />
         ) : null}
         {companionCount > 0 ? (
           <Row

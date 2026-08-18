@@ -2,30 +2,30 @@
 
 import { useEffect } from 'react'
 import { useBrainStore } from '@/core/store/useBrainStore'
-import { useOdinStore } from '@/core/store/useOdinStore'
+import { useMindStore } from '@/core/store/useMindStore'
 import { useSurfaceStore } from '@/core/store/useSurfaceStore'
 import { emit } from '@/core/events/bus'
-import { OdinClient, odinUrl } from './client'
+import { MindClient, mindUrl } from './client'
 import { publishFrame, resetStreams } from './streams'
-import { setOdinClient } from './link'
-import type { OdinEvent } from './protocol'
+import { setMindClient } from './link'
+import type { MindEvent } from './protocol'
 
 /**
- * Connects to Odin and turns its events into SHIVA.
+ * Connects to the mind and turns its events into SHIVA.
  *
- * This is the seam the whole merge runs through. Odin keeps its Python
+ * This is the seam the whole merge runs through. The mind keeps its Python
  * capabilities — the Claude brain, the companions, the Mac-bound tools — and
- * SHIVA becomes its only face. Everything Odin used to draw into a flat HTML
+ * SHIVA becomes its only face. Everything the mind used to draw into a flat HTML
  * HUD arrives here instead and becomes a surface in the room, an orbiting
  * companion, or a change in the orb.
  *
  * Deliberately one-way at this layer. Events come in and land in stores; going
- * the other way is `sendToOdin`, which the brain client calls. Keeping the two
+ * the other way is `sendToMind`, which the brain client calls. Keeping the two
  * directions separate means a flood of events can never turn into a feedback
  * loop of replies.
  */
 
-/** Odin has five states; SHIVA's orb has four. `acting` is a kind of thinking. */
+/** The mind has five states; SHIVA's orb has four. `acting` is a kind of thinking. */
 function toPhase(state: string): 'idle' | 'listening' | 'thinking' | 'speaking' {
   if (state === 'listening') return 'listening'
   if (state === 'speaking') return 'speaking'
@@ -39,45 +39,45 @@ function toPhase(state: string): 'idle' | 'listening' | 'thinking' | 'speaking' 
  * Off by default on a hosted page: `ws://127.0.0.1` from `https://` is blocked
  * by the browser and cannot be made to work, so attempting it would spend a
  * reconnect loop achieving nothing and report an error for a correctly
- * configured deployment. Set `NEXT_PUBLIC_ODIN_WS` to a `wss://` address to
- * link a hosted SHIVA to a tunnelled Odin.
+ * configured deployment. Set `NEXT_PUBLIC_SHIVA_WS` to a `wss://` address to
+ * link a hosted SHIVA to a tunnelled the mind.
  */
 function shouldConnect(url: string): boolean {
   if (typeof window === 'undefined') return false
-  if (new URLSearchParams(window.location.search).get('odin') === 'off') return false
+  if (new URLSearchParams(window.location.search).get('mind') === 'off') return false
   return window.location.protocol !== 'https:' || url.startsWith('wss://')
 }
 
 /**
- * Turns one Odin event into SHIVA state.
+ * Turns one the mind event into SHIVA state.
  *
  * Module scope rather than a closure inside the hook so it can be driven
- * directly — by the test suite through `window.__shiva.odin`, and by anything
+ * directly — by the test suite through `window.__shiva.mind`, and by anything
  * later that replays a recorded session. A handler reachable only from inside a
  * live WebSocket is a handler that can only be tested with a live WebSocket.
  */
-export function handleOdinEvent(event: OdinEvent): void {
-  const odinStore = useOdinStore.getState()
+export function handleMindEvent(event: MindEvent): void {
+  const mindStore = useMindStore.getState()
   const surfaceStore = useSurfaceStore.getState()
 
   switch (event.kind) {
     case 'state':
-      odinStore.setState(event.value)
+      mindStore.setState(event.value)
       // One source of truth for the orb: whatever brain is answering, the
       // avatar reads its phase from the same place.
       useBrainStore.getState().setPhase(toPhase(event.value))
       break
 
     case 'odinmode':
-      odinStore.setAwake(event.value === 'awake')
+      mindStore.setAwake(event.value === 'awake')
       break
 
     case 'log':
-      odinStore.appendLog(event.text)
+      mindStore.appendLog(event.text)
       break
 
     case 'transcript':
-      // Odin echoes the user's own turn back as a transcript event. Pushing
+      // the mind echoes the user's own turn back as a transcript event. Pushing
       // that would duplicate every typed message, since the console already
       // recorded it locally when it was sent.
       if (event.who === 'user') break
@@ -85,12 +85,12 @@ export function handleOdinEvent(event: OdinEvent): void {
       break
 
     case 'presence':
-      odinStore.setPresence(event.name, event.known)
+      mindStore.setPresence(event.name, event.known)
       // Someone arriving is worth a visible reaction from the avatar before
       // anyone has said anything — a surge through the orb and an audio blip.
       //
       // Deliberately NOT `brain:wake`, which sounds right and is not: that
-      // event opens the text input and focuses it, so Heimdall noticing you
+      // event opens the text input and focuses it, so Nandi noticing you
       // walk past would pop a keyboard prompt open every time.
       emit('ui:confirm', { intensity: event.known ? 1 : 0.45 })
       break
@@ -127,34 +127,34 @@ export function handleOdinEvent(event: OdinEvent): void {
       break
 
     case 'roster':
-      odinStore.setRoster(event.items)
+      mindStore.setRoster(event.items)
       break
 
     case 'dispatch':
-      odinStore.dispatch(event.id, event.slug, event.task)
+      mindStore.dispatch(event.id, event.slug, event.task)
       break
 
     case 'companion':
-      odinStore.setCompanionState(event.slug, event.state)
+      mindStore.setCompanionState(event.slug, event.state)
       break
 
     case 'dispatch_return':
-      odinStore.returnDispatch(event.id, event.slug, event.ok)
+      mindStore.returnDispatch(event.id, event.slug, event.ok)
       break
 
     case 'dispatch_clear':
-      odinStore.clearDispatch()
+      mindStore.clearDispatch()
       break
 
     case 'devices':
     case 'iot':
-      odinStore.setDevices(event.items)
+      mindStore.setDevices(event.items)
       // Kept in one surface with a stable id, so a device changing state
       // refreshes the panel in place instead of stacking another copy of the
       // same list onto the wall.
       surfaceStore.push(
         { kind: 'connectors', title: 'Connectors', items: event.items },
-        'odin-connectors',
+        'mind-connectors',
       )
       break
 
@@ -167,51 +167,51 @@ export function handleOdinEvent(event: OdinEvent): void {
       surfaceStore.push(
         {
           kind: 'stream',
-          title: event.kind === 'camera' ? 'Heimdall' : 'Mimir',
+          title: event.kind === 'camera' ? 'Nandi' : 'Drishti',
           source: event.kind,
         },
-        `odin-${event.kind}`,
+        `mind-${event.kind}`,
       )
       break
     }
 
     case 'unknown':
-      // A newer Odin talking to an older SHIVA. Logged rather than ignored,
-      // because "Odin did something and nothing happened" is otherwise
+      // A newer the mind talking to an older SHIVA. Logged rather than ignored,
+      // because "the mind did something and nothing happened" is otherwise
       // impossible to diagnose from this side.
-      odinStore.appendLog(`unhandled event: ${event.name}`)
+      mindStore.appendLog(`unhandled event: ${event.name}`)
       break
   }
 }
 
-export function useOdinLink(): void {
+export function useMindLink(): void {
   useEffect(() => {
-    const url = odinUrl()
+    const url = mindUrl()
     if (!shouldConnect(url)) return
 
-    const client = new OdinClient({
+    const client = new MindClient({
       url,
       onStatus: (status) => {
-        useOdinStore.getState().setLink(status)
+        useMindStore.getState().setLink(status)
         if (status.status === 'live') {
-          useOdinStore.getState().appendLog(`linked to Odin at ${status.url}`)
+          useMindStore.getState().appendLog(`linked to the mind at ${status.url}`)
         }
         if (status.status === 'off' || status.status === 'unreachable') {
           // Companions cannot still be out on errands if the link is down. The
           // alternative is orbs left spinning at "working" forever, which reads
-          // as Odin being busy rather than absent.
-          useOdinStore.getState().clearDispatch()
+          // as the mind being busy rather than absent.
+          useMindStore.getState().clearDispatch()
         }
       },
-      onEvent: handleOdinEvent,
+      onEvent: handleMindEvent,
     })
 
-    setOdinClient(client)
+    setMindClient(client)
     client.connect()
 
     // Two moments when the answer is likely to have changed, and the client has
     // probably stopped trying by now: the tab coming back to the foreground
-    // after Odin was started at the desk, and the network returning after a
+    // after the mind was started at the desk, and the network returning after a
     // sleep. Both start a fresh attempt window rather than a permanent loop.
     const wake = () => {
       if (document.visibilityState === 'visible') client.retry()
@@ -224,9 +224,9 @@ export function useOdinLink(): void {
       document.removeEventListener('visibilitychange', wake)
       window.removeEventListener('online', wake)
       window.removeEventListener('focus', wake)
-      setOdinClient(null)
+      setMindClient(null)
       client.close()
-      useOdinStore.getState().reset()
+      useMindStore.getState().reset()
       resetStreams()
     }
   }, [])

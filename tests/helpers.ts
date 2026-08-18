@@ -19,15 +19,15 @@ import type { Page } from '@playwright/test'
  * `capture=1` makes the framebuffer readable, which is off in normal use
  * because preserving it costs frames.
  *
- * `odin=off` because there is no Odin here and there never will be — it is a
+ * `mind=off` because there is no the mind here and there never will be — it is a
  * Python process on a Mac. Attempting the link is correct behaviour and the
  * refusal is handled, but Chromium logs a console error for every failed
  * WebSocket from the network stack, where no JavaScript can suppress it. Those
  * lines would fail the render spec's "no console errors" assertion for a
- * reason that is not a fault. The link's own behaviour when Odin is absent is
- * tested directly, in odin.spec.ts, where it belongs.
+ * reason that is not a fault. The link's own behaviour when the mind is absent is
+ * tested directly, in mind.spec.ts, where it belongs.
  */
-export const APP_URL = '/?quality=low&capture=1&odin=off'
+export const APP_URL = '/?quality=low&capture=1&mind=off'
 
 export async function bootApp(page: Page): Promise<void> {
   await page.goto(APP_URL)

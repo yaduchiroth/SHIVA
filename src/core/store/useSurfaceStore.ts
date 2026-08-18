@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import type { StreamSource } from '@/adapters/odin/streams'
+import type { StreamSource } from '@/adapters/mind/streams'
 
 /**
  * The screens floating around the room.
@@ -27,7 +27,7 @@ export interface ConnectorItem {
   name: string
   status?: string
   detail?: string
-  /** Undefined means Odin did not say, which is not the same as offline. */
+  /** Undefined means the mind did not say, which is not the same as offline. */
   online?: boolean
 }
 
@@ -47,14 +47,14 @@ export type SurfaceContent =
   /** A live page by URL. Many sites refuse to be embedded; the surface says so. */
   | { kind: 'web'; title: string; url: string }
   /**
-   * A live JPEG feed — Heimdall's camera, or a shared Mac screen.
+   * A live JPEG feed — Nandi's camera, or a shared Mac screen.
    *
    * Carries no pixels. Frames arrive several times a second and live in
-   * `adapters/odin/streams`, outside React, because putting them here would
+   * `adapters/mind/streams`, outside React, because putting them here would
    * re-render the entire wall on every frame to update one image.
    */
   | { kind: 'stream'; title: string; source: StreamSource }
-  /** What Odin is connected to, and what it is still missing. */
+  /** What the mind is connected to, and what it is still missing. */
   | { kind: 'connectors'; title: string; items: ConnectorItem[] }
 
 export type SurfaceKind = SurfaceContent['kind']

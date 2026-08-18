@@ -1,0 +1,15 @@
+claude-agent-sdk>=0.1.0
+python-dotenv>=1.0
+httpx>=0.27
+websockets>=12.0
+numpy>=1.26
+sounddevice>=0.4.6
+webrtcvad-wheels>=2.0.14
+mlx-whisper>=0.4
+pvporcupine>=3.0
+opencv-python>=4.10
+# Local neural TTS (SHIVA_TTS=kokoro). NOTE: misaki pins an unbuildable spacy on
+# Python 3.13 — install it manually in this order:
+#   pip install mlx-audio spacy && pip install --no-deps misaki \
+#     && pip install num2words phonemizer espeakng-loader && brew install espeak-ng
+mlx-audio>=0.4

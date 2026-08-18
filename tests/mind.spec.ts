@@ -4,43 +4,43 @@ import {
   NO_REPLAY,
   STICKY,
   lightKinds,
-  parseOdinEvent,
-  type OdinEvent,
-} from '@/adapters/odin/protocol'
-import { useOdinStore } from '@/core/store/useOdinStore'
+  parseMindEvent,
+  type MindEvent,
+} from '@/adapters/mind/protocol'
+import { useMindStore } from '@/core/store/useMindStore'
 
 /**
- * The link to Odin.
+ * The link to the mind.
  *
- * Odin is a Python process on a Mac, and there is neither one nor a Mac in CI.
+ * The mind is a Python process on a Mac, and there is neither one nor a Mac in CI.
  * What can be tested without it is everything downstream of the socket, which
  * is where the bugs actually live: a wire format transcribed from another
  * repository, coercions across a boundary from a language with no static types,
  * and the state machine that decides what a companion orb is doing.
  *
  * The parser tests are deliberately unkind. Every payload below is one a real
- * Odin can send — `ok` omitted on success, `values` called `data`, `items`
+ * The mind can send — `ok` omitted on success, `values` called `data`, `items`
  * missing entirely when a list is empty — and each one, taken at face value,
  * produces either a crash or a silently empty screen.
  */
 
-const parse = (msg: Record<string, unknown>): OdinEvent => {
-  const event = parseOdinEvent(msg)
+const parse = (msg: Record<string, unknown>): MindEvent => {
+  const event = parseMindEvent(msg)
   if (!event) throw new Error('expected an event')
   return event
 }
 
 test.describe('parsing the wire format', () => {
   test('a message with no kind is not an event', () => {
-    expect(parseOdinEvent({ ts: 1 })).toBeNull()
-    expect(parseOdinEvent(null)).toBeNull()
-    expect(parseOdinEvent('roster')).toBeNull()
+    expect(parseMindEvent({ ts: 1 })).toBeNull()
+    expect(parseMindEvent(null)).toBeNull()
+    expect(parseMindEvent('roster')).toBeNull()
   })
 
   test('an unrecognised kind is carried, not dropped', () => {
-    // A newer Odin talking to an older SHIVA is the normal state of two
+    // A newer the mind talking to an older SHIVA is the normal state of two
     // repositories, not an error. Dropping the connection over it, or throwing,
-    // would make every Odin release a coordinated one.
+    // would make every the mind release a coordinated one.
     const event = parse({ kind: 'quantum_ansible', ts: 1, payload: 42 })
     expect(event.kind).toBe('unknown')
     if (event.kind === 'unknown') {
@@ -55,7 +55,7 @@ test.describe('parsing the wire format', () => {
   })
 
   test('a chart accepts values, data or y for its numbers', () => {
-    // Odin normalises these on its side, but it is one missing `or` there and a
+    // the mind normalises these on its side, but it is one missing `or` there and a
     // blank chart here — and a chart that plots nothing looks like no data
     // rather than like a bug.
     const event = parse({
@@ -94,18 +94,21 @@ test.describe('parsing the wire format', () => {
   test('a roster entry missing its orbit still places the companion', () => {
     // Companion files only sometimes specify an orbit; the layout falls back to
     // a golden-angle spread, which needs the fields absent rather than NaN.
-    const event = parse({ kind: 'roster', items: [{ slug: 'thor', name: 'Thor', role: 'Ops' }] })
+    const event = parse({
+      kind: 'roster',
+      items: [{ slug: 'ganesha', name: 'Ganesha', role: 'Ops' }],
+    })
     if (event.kind !== 'roster') throw new Error('wrong kind')
-    expect(event.items[0]).toMatchObject({ slug: 'thor', color: '#e8b93c' })
+    expect(event.items[0]).toMatchObject({ slug: 'ganesha', color: '#e8b93c' })
     expect(event.items[0]!.orbit.radius).toBeUndefined()
   })
 
   test('a dispatch return without an ok field counts as success', () => {
-    // Odin only sets `ok` when something went wrong. Defaulting to false would
+    // the mind only sets `ok` when something went wrong. Defaulting to false would
     // mark every successful errand as failed.
-    const event = parse({ kind: 'dispatch_return', id: '1', slug: 'thor' })
+    const event = parse({ kind: 'dispatch_return', id: '1', slug: 'ganesha' })
     expect(event).toMatchObject({ ok: true })
-    expect(parse({ kind: 'dispatch_return', id: '1', slug: 'thor', ok: false })).toMatchObject({
+    expect(parse({ kind: 'dispatch_return', id: '1', slug: 'ganesha', ok: false })).toMatchObject({
       ok: false,
     })
   })
@@ -122,8 +125,8 @@ test.describe('parsing the wire format', () => {
 })
 
 test.describe('replay semantics', () => {
-  test('the live-only kinds match Odin`s own NO_REPLAY set', () => {
-    // Transcribed from odin/bus.py. If these drift, a reconnecting SHIVA draws
+  test('the live-only kinds match the mind`s own NO_REPLAY set', () => {
+    // Transcribed from mind/bus.py. If these drift, a reconnecting SHIVA draws
     // dispatch beams for errands that finished ten minutes ago.
     for (const kind of ['audio', 'camera', 'screen', 'dispatch', 'companion']) {
       expect(NO_REPLAY.has(kind)).toBe(true)
@@ -147,18 +150,18 @@ test.describe('replay semantics', () => {
 })
 
 test.describe('companion state', () => {
-  test.beforeEach(() => useOdinStore.getState().reset())
+  test.beforeEach(() => useMindStore.getState().reset())
 
   test('a roster refresh does not stand down a companion mid-errand', () => {
-    // Odin re-emits the whole roster whenever a companion file changes. Resetting
+    // the mind re-emits the whole roster whenever a companion file changes. Resetting
     // every orb to dormant would make working companions look idle while they
     // are still out.
-    const store = useOdinStore.getState()
-    const roster = [{ slug: 'thor', name: 'Thor', role: 'Ops', color: '#fff', orbit: {} }]
+    const store = useMindStore.getState()
+    const roster = [{ slug: 'ganesha', name: 'Ganesha', role: 'Ops', color: '#fff', orbit: {} }]
     store.setRoster(roster)
-    store.dispatch('d1', 'thor', 'check the deploy')
-    useOdinStore.getState().setRoster(roster)
-    expect(useOdinStore.getState().companions[0]).toMatchObject({
+    store.dispatch('d1', 'ganesha', 'check the deploy')
+    useMindStore.getState().setRoster(roster)
+    expect(useMindStore.getState().companions[0]).toMatchObject({
       state: 'working',
       task: 'check the deploy',
     })
@@ -167,31 +170,31 @@ test.describe('companion state', () => {
   test('a late return from an earlier errand does not end the current one', () => {
     // The same companion can be sent out twice. Matching on the slug alone
     // would let the first errand's return stand down the second.
-    const store = useOdinStore.getState()
-    store.setRoster([{ slug: 'thor', name: 'Thor', role: 'Ops', color: '#fff', orbit: {} }])
-    store.dispatch('d1', 'thor', 'first')
-    store.dispatch('d2', 'thor', 'second')
-    useOdinStore.getState().returnDispatch('d1', 'thor', true)
-    expect(useOdinStore.getState().companions[0]).toMatchObject({
+    const store = useMindStore.getState()
+    store.setRoster([{ slug: 'ganesha', name: 'Ganesha', role: 'Ops', color: '#fff', orbit: {} }])
+    store.dispatch('d1', 'ganesha', 'first')
+    store.dispatch('d2', 'ganesha', 'second')
+    useMindStore.getState().returnDispatch('d1', 'ganesha', true)
+    expect(useMindStore.getState().companions[0]).toMatchObject({
       state: 'working',
       task: 'second',
     })
   })
 
   test('losing the link stands every companion down', () => {
-    // Orbs left spinning at "working" forever read as Odin being busy rather
+    // Orbs left spinning at "working" forever read as the mind being busy rather
     // than absent, which is the opposite of the truth.
-    const store = useOdinStore.getState()
-    store.setRoster([{ slug: 'thor', name: 'Thor', role: 'Ops', color: '#fff', orbit: {} }])
-    store.dispatch('d1', 'thor', 'x')
-    useOdinStore.getState().clearDispatch()
-    expect(useOdinStore.getState().companions[0]).toMatchObject({ state: 'dormant', task: '' })
+    const store = useMindStore.getState()
+    store.setRoster([{ slug: 'ganesha', name: 'Ganesha', role: 'Ops', color: '#fff', orbit: {} }])
+    store.dispatch('d1', 'ganesha', 'x')
+    useMindStore.getState().clearDispatch()
+    expect(useMindStore.getState().companions[0]).toMatchObject({ state: 'dormant', task: '' })
   })
 
   test('the log is bounded', () => {
-    const store = useOdinStore.getState()
+    const store = useMindStore.getState()
     for (let i = 0; i < 200; i++) store.appendLog(`line ${i}`)
-    const log = useOdinStore.getState().log
+    const log = useMindStore.getState().log
     expect(log.length).toBeLessThanOrEqual(60)
     expect(log.at(-1)!.text).toBe('line 199')
   })
@@ -200,54 +203,54 @@ test.describe('companion state', () => {
 /**
  * Events becoming interface.
  *
- * Driven through `window.__shiva.odin`, which feeds a raw wire message into the
+ * Driven through `window.__shiva.mind`, which feeds a raw wire message into the
  * same parser and the same handler the socket uses. That is the whole chain
  * apart from the WebSocket itself — which is the one part that genuinely needs
- * a Mac with Odin running on it.
+ * a Mac with the mind running on it.
  */
-test.describe('an Odin event becomes interface', () => {
+test.describe('a mind event becomes interface', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/?quality=low&capture=1&dev=1&odin=off')
+    await page.goto('/?quality=low&capture=1&dev=1&mind=off')
     await page.waitForSelector('[data-testid="os-ready"]', { state: 'attached', timeout: 90_000 })
     await page.waitForFunction(() => Boolean(window.__shiva), null, { timeout: 30_000 })
   })
 
   test('a report event puts a sandboxed surface in the room', async ({ page }) => {
     await page.evaluate(() =>
-      window.__shiva!.odin({ kind: 'report', title: 'Q3', html: '<h2>Numbers</h2>' }),
+      window.__shiva!.mind({ kind: 'report', title: 'Q3', html: '<h2>Numbers</h2>' }),
     )
     await expect(page.locator('[data-surface-kind="report"]')).toHaveCount(1)
     expect(await page.locator('[data-testid="report-frame"]').getAttribute('sandbox')).toBe('')
   })
 
   test('several reports accumulate rather than replacing one another', async ({ page }) => {
-    // Odin's own HUD had a single big screen and each report replaced the last.
+    // the mind's own HUD had a single big screen and each report replaced the last.
     // Multiple surfaces is the point of the wall.
     await page.evaluate(() => {
-      window.__shiva!.odin({ kind: 'report', title: 'one', html: '<p>1</p>' })
-      window.__shiva!.odin({ kind: 'report', title: 'two', html: '<p>2</p>' })
-      window.__shiva!.odin({ kind: 'chart', title: 'three', series: [{ name: 'a', values: [1] }] })
+      window.__shiva!.mind({ kind: 'report', title: 'one', html: '<p>1</p>' })
+      window.__shiva!.mind({ kind: 'report', title: 'two', html: '<p>2</p>' })
+      window.__shiva!.mind({ kind: 'chart', title: 'three', series: [{ name: 'a', values: [1] }] })
     })
     await expect(page.locator('[data-testid="surface"]')).toHaveCount(3)
   })
 
   test('wellclear empties the room', async ({ page }) => {
     await page.evaluate(() => {
-      window.__shiva!.odin({ kind: 'card', title: 'a', body: 'b' })
-      window.__shiva!.odin({ kind: 'wellclear' })
+      window.__shiva!.mind({ kind: 'card', title: 'a', body: 'b' })
+      window.__shiva!.mind({ kind: 'wellclear' })
     })
     await expect(page.locator('[data-testid="surface"]')).toHaveCount(0)
   })
 
   test('a state event drives the avatar', async ({ page }) => {
     // One source of truth for the orb: whichever brain is answering, the phase
-    // the avatar reads comes from the same place. Odin has five states and the
+    // the avatar reads comes from the same place. The mind has five states and the
     // orb has four, so `acting` has to land somewhere sensible rather than
-    // falling through to idle while Odin is visibly busy.
+    // falling through to idle while the mind is visibly busy.
     const seen = await page.evaluate(() => {
       const out: string[] = []
       for (const value of ['listening', 'thinking', 'acting', 'speaking', 'idle']) {
-        window.__shiva!.odin({ kind: 'state', value })
+        window.__shiva!.mind({ kind: 'state', value })
         out.push(window.__shiva!.state().phase)
       }
       return out
@@ -257,11 +260,11 @@ test.describe('an Odin event becomes interface', () => {
 
   test('a roster event puts companions in orbit', async ({ page }) => {
     const ok = await page.evaluate(() =>
-      window.__shiva!.odin({
+      window.__shiva!.mind({
         kind: 'roster',
         items: [
-          { slug: 'thor', name: 'Thor', role: 'Operations', color: '#f0b429', orbit: {} },
-          { slug: 'freyja', name: 'Freyja', role: 'Research', color: '#4ade9a', orbit: {} },
+          { slug: 'ganesha', name: 'Ganesha', role: 'Operations', color: '#f0b429', orbit: {} },
+          { slug: 'lakshmi', name: 'Lakshmi', role: 'Research', color: '#4ade9a', orbit: {} },
         ],
       }),
     )
@@ -270,8 +273,8 @@ test.describe('an Odin event becomes interface', () => {
     // counting them is the visible half; the store is the rest.
     await expect(page.getByTestId('hud-status')).toContainText('Council')
     expect(await page.evaluate(() => window.__shiva!.state().companions)).toEqual([
-      { slug: 'thor', state: 'dormant' },
-      { slug: 'freyja', state: 'dormant' },
+      { slug: 'ganesha', state: 'dormant' },
+      { slug: 'lakshmi', state: 'dormant' },
     ])
   })
 
@@ -279,38 +282,38 @@ test.describe('an Odin event becomes interface', () => {
     // The whole reason the companions are visible: delegation stops being a
     // line in a log and becomes something you watch leave and come back.
     const states = await page.evaluate(() => {
-      window.__shiva!.odin({
+      window.__shiva!.mind({
         kind: 'roster',
-        items: [{ slug: 'thor', name: 'Thor', role: 'Ops', color: '#f0b429', orbit: {} }],
+        items: [{ slug: 'ganesha', name: 'Ganesha', role: 'Ops', color: '#f0b429', orbit: {} }],
       })
-      window.__shiva!.odin({ kind: 'dispatch', id: 'd1', slug: 'thor', task: 'check CI' })
+      window.__shiva!.mind({ kind: 'dispatch', id: 'd1', slug: 'ganesha', task: 'check CI' })
       const working = window.__shiva!.state().companions[0]!.state
-      window.__shiva!.odin({ kind: 'dispatch_return', id: 'd1', slug: 'thor' })
+      window.__shiva!.mind({ kind: 'dispatch_return', id: 'd1', slug: 'ganesha' })
       return { working, after: window.__shiva!.state().companions[0]!.state }
     })
     expect(states).toEqual({ working: 'working', after: 'done' })
   })
 
   test('a device list becomes one connectors screen that refreshes in place', async ({ page }) => {
-    // Odin re-emits the whole device list whenever anything changes. Appending
+    // the mind re-emits the whole device list whenever anything changes. Appending
     // would stack a fresh copy of the same panel onto the wall every time a
     // lamp went off, and evict everything else within a minute.
     await page.evaluate(() => {
-      window.__shiva!.odin({
+      window.__shiva!.mind({
         kind: 'devices',
         items: [{ name: 'PS5', online: true }, { name: 'Studio Light' }],
       })
-      window.__shiva!.odin({ kind: 'devices', items: [{ name: 'PS5', online: false }] })
+      window.__shiva!.mind({ kind: 'devices', items: [{ name: 'PS5', online: false }] })
     })
     await expect(page.locator('[data-surface-kind="connectors"]')).toHaveCount(1)
     await expect(page.getByTestId('connectors').locator('li')).toHaveCount(1)
   })
 
   test('a device with no reported state is not shown as offline', async ({ page }) => {
-    // Odin often knows about a device without knowing whether it is reachable.
+    // the mind often knows about a device without knowing whether it is reachable.
     // A red dot there is a false alarm about something that is probably fine.
     await page.evaluate(() =>
-      window.__shiva!.odin({ kind: 'devices', items: [{ name: 'Studio Light' }] }),
+      window.__shiva!.mind({ kind: 'devices', items: [{ name: 'Studio Light' }] }),
     )
     await expect(page.getByTestId('connectors').locator('[aria-label="unknown"]')).toHaveCount(1)
   })
@@ -324,7 +327,7 @@ test.describe('an Odin event becomes interface', () => {
       const jpg =
         '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=='
       for (let i = 0; i < 12; i++) {
-        window.__shiva!.odin({ kind: 'camera', jpg, names: i > 6 ? ['Boss'] : [] })
+        window.__shiva!.mind({ kind: 'camera', jpg, names: i > 6 ? ['Boss'] : [] })
       }
       return window.__shiva!.surfaces.list().filter((s) => s.kind === 'stream').length
     })
@@ -345,11 +348,11 @@ test.describe('an Odin event becomes interface', () => {
   })
 
   test('an unrecognised event changes nothing and breaks nothing', async ({ page }) => {
-    // A newer Odin talking to an older SHIVA. It is logged rather than ignored,
-    // because "Odin did something and nothing happened" is otherwise impossible
+    // A newer the mind talking to an older SHIVA. It is logged rather than ignored,
+    // because "the mind did something and nothing happened" is otherwise impossible
     // to diagnose from this side.
     const accepted = await page.evaluate(() =>
-      window.__shiva!.odin({ kind: 'sleipnir', hooves: 8 }),
+      window.__shiva!.mind({ kind: 'sleipnir', hooves: 8 }),
     )
     expect(accepted).toBe(true)
     await expect(page.locator('[data-testid="surface"]')).toHaveCount(0)
@@ -357,20 +360,20 @@ test.describe('an Odin event becomes interface', () => {
 })
 
 /**
- * Odin absent.
+ * The mind absent.
  *
  * The normal state on any machine that is not the desk, and therefore the state
- * that has to degrade well. The rest of the suite runs with `odin=off`; this is
+ * that has to degrade well. The rest of the suite runs with `mind=off`; this is
  * the one place the link is genuinely allowed to fail.
  */
-test.describe('when Odin is not running', () => {
+test.describe('when the mind is not running', () => {
   test('the interface boots anyway and says so', async ({ page }) => {
     await page.goto('/?quality=low&capture=1&dev=1')
     await page.waitForSelector('[data-testid="os-ready"]', { state: 'attached', timeout: 90_000 })
 
-    // Everything that does not need Odin still works.
+    // Everything that does not need the mind still works.
     await expect(page.locator('canvas')).toBeVisible()
-    await expect(page.getByTestId('hud-status')).toContainText('Odin')
+    await expect(page.getByTestId('hud-status')).toContainText('Mind')
 
     // And the row says something a person can act on, rather than nothing.
     await expect

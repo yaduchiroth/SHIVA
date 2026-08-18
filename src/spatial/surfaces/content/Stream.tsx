@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { onFrame, type StreamSource } from '@/adapters/odin/streams'
+import { onFrame, type StreamSource } from '@/adapters/mind/streams'
 
 /**
  * A live JPEG feed, updated without re-rendering.
@@ -21,8 +21,8 @@ import { onFrame, type StreamSource } from '@/adapters/odin/streams'
 const STALE_MS = 4000
 
 const LABEL: Record<StreamSource, string> = {
-  camera: 'Heimdall',
-  screen: 'Mimir',
+  camera: 'Nandi',
+  screen: 'Drishti',
 }
 
 export function Stream({ source }: { source: StreamSource }) {

@@ -1,15 +1,15 @@
 /**
- * Odin's event protocol, as SHIVA understands it.
+ * The mind's event protocol, as SHIVA understands it.
  *
- * Odin (the Python side, on the Mac) broadcasts everything it does over a
+ * The mind (the Python side, on the Mac) broadcasts everything it does over a
  * WebSocket as `{kind, ts, ...payload}`. SHIVA is now the only client of that
  * bus — the flat HTML HUD it shipped with is replaced by this scene — so this
  * file is the contract between the two halves, and it is transcribed from
- * `odin/bus.py` and the `bus.emit(...)` call sites rather than invented.
+ * `mind/bus.py` and the `bus.emit(...)` call sites rather than invented.
  *
  * Two properties matter more than completeness:
  *
- * **Unknown kinds are carried, not dropped or thrown on.** Odin will grow
+ * **Unknown kinds are carried, not dropped or thrown on.** The mind will grow
  * events faster than this file is updated, and a version skew between two
  * repositories is the normal state of affairs, not an error. An unrecognised
  * kind becomes `{kind: 'unknown'}` with its payload intact, so the link stays
@@ -22,8 +22,8 @@
  * diagnosable.
  */
 
-/** Odin's own conversational state, as reported by `bus.state()`. */
-export type OdinState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'acting'
+/** The mind's own conversational state, as reported by `bus.state()`. */
+export type MindState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'acting'
 
 /** Where a dispatched companion is in its errand. */
 export type CompanionState = 'dormant' | 'working' | 'returning' | 'done' | 'failed'
@@ -45,14 +45,14 @@ export interface ChartSeriesWire {
 
 export interface DeviceSpec {
   name: string
-  /** Free-form; Odin's device list is heterogeneous by design. */
+  /** Free-form; the mind's device list is heterogeneous by design. */
   status?: string
   detail?: string
   online?: boolean
 }
 
-export type OdinEvent =
-  | { kind: 'state'; value: OdinState }
+export type MindEvent =
+  | { kind: 'state'; value: MindState }
   | { kind: 'log'; text: string }
   | { kind: 'transcript'; who: string; text: string }
   | { kind: 'presence'; name: string; known: boolean }
@@ -86,9 +86,9 @@ export type OdinEvent =
   | { kind: 'unknown'; name: string; payload: Record<string, unknown> }
 
 /**
- * Kinds Odin never replays to a reconnecting client.
+ * Kinds the mind never replays to a reconnecting client.
  *
- * Mirrors `Bus.NO_REPLAY`. Transcribed here not to duplicate the rule — Odin
+ * Mirrors `Bus.NO_REPLAY`. Transcribed here not to duplicate the rule — the mind
  * enforces it — but because SHIVA has to behave correctly when it *is* honoured:
  * these are moment-in-time events, and a reconnect that redrew dispatch beams
  * for errands finished ten minutes ago would be worse than showing nothing.
@@ -106,7 +106,7 @@ export const NO_REPLAY: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Standing state Odin always resends on connect, ahead of the replay window.
+ * Standing state the mind always resends on connect, ahead of the replay window.
  *
  * Mirrors `Bus.STICKY`. Without it, a reloaded page has no companions — the
  * roster was emitted once at startup and scrolled out of the 30-event history
@@ -117,10 +117,10 @@ export const STICKY: ReadonlySet<string> = new Set(['roster', 'devices'])
 /**
  * Base64 image frames, which are the only genuinely expensive feed on the bus.
  *
- * Odin sends camera frames whenever a HUD is open, several per second, as
+ * The mind sends camera frames whenever a HUD is open, several per second, as
  * base64 JPEG inside JSON. Subscribing to them when nothing is displaying them
  * costs bandwidth and a JSON parse per frame for nothing, which is exactly what
- * Odin's `subscribe` message exists to avoid.
+ * The mind's `subscribe` message exists to avoid.
  */
 export const HEAVY_KINDS: readonly string[] = ['camera', 'screen', 'audio']
 
@@ -162,12 +162,12 @@ const ODIN_STATES: ReadonlySet<string> = new Set([
 /**
  * Turns one wire message into an event.
  *
- * Returns null only when the message is not an Odin event at all — no object,
+ * Returns null only when the message is not a mind event at all — no object,
  * no `kind`. Anything with a kind comes back, even if unrecognised, because a
- * newer Odin talking to an older SHIVA is a normal situation and not one worth
+ * newer the mind talking to an older SHIVA is a normal situation and not one worth
  * dropping the connection over.
  */
-export function parseOdinEvent(raw: unknown): OdinEvent | null {
+export function parseMindEvent(raw: unknown): MindEvent | null {
   if (typeof raw !== 'object' || raw === null) return null
   const msg = raw as Record<string, unknown>
   const kind = msg.kind
@@ -176,12 +176,12 @@ export function parseOdinEvent(raw: unknown): OdinEvent | null {
   switch (kind) {
     case 'state': {
       const value = str(msg.value)
-      return { kind, value: (ODIN_STATES.has(value) ? value : 'idle') as OdinState }
+      return { kind, value: (ODIN_STATES.has(value) ? value : 'idle') as MindState }
     }
     case 'log':
       return { kind, text: str(msg.text) }
     case 'transcript':
-      return { kind, who: str(msg.who, 'odin'), text: str(msg.text) }
+      return { kind, who: str(msg.who, 'mind'), text: str(msg.text) }
     case 'presence':
       return { kind, name: str(msg.name, 'Guest'), known: bool(msg.known) }
     case 'odinmode':
@@ -196,7 +196,7 @@ export function parseOdinEvent(raw: unknown): OdinEvent | null {
         title: str(msg.title),
         ctype: str(msg.ctype) === 'line' ? 'line' : 'bar',
         labels: strList(msg.labels),
-        // Odin already normalises values/data/y on its side, but it is one
+        // the mind already normalises values/data/y on its side, but it is one
         // `or` there and a blank chart here if it ever misses one.
         series: objList(msg.series)
           .map((s) => ({
@@ -241,7 +241,7 @@ export function parseOdinEvent(raw: unknown): OdinEvent | null {
         kind,
         id: str(msg.id),
         slug: str(msg.slug),
-        // Absent means it came back fine; Odin only sets this on failure.
+        // Absent means it came back fine; the mind only sets this on failure.
         ok: msg.ok === undefined ? true : bool(msg.ok),
         summary: str(msg.summary ?? msg.result),
       }
@@ -281,9 +281,9 @@ export function parseOdinEvent(raw: unknown): OdinEvent | null {
 /**
  * Every kind SHIVA knows about, minus the image blobs.
  *
- * For `OdinClient.setKinds` when a client genuinely wants to drop the camera
- * and screen feeds. Odin's subscription is a whitelist, so opting out of two
- * kinds means naming all the others — and accepting that a kind Odin gains
+ * For `MindClient.setKinds` when a client genuinely wants to drop the camera
+ * and screen feeds. The mind's subscription is a whitelist, so opting out of two
+ * kinds means naming all the others — and accepting that a kind the mind gains
  * later will not arrive until this list is updated. That is why it is not the
  * default.
  */
@@ -311,7 +311,7 @@ export function lightKinds(): string[] {
     'iot',
     'raven',
     'knowledge',
-    'muninn',
+    'smriti',
     'routine',
     'workflow',
     'usage',

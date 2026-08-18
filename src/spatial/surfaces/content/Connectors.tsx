@@ -3,10 +3,10 @@
 import type { ConnectorItem } from '@/core/store/useSurfaceStore'
 
 /**
- * What Odin is wired into, and what it is not.
+ * What the mind is wired into, and what it is not.
  *
  * Three states, not two. "Connected" and "not connected" are the obvious pair,
- * and they lose the one that matters most: Odin frequently reports a device it
+ * and they lose the one that matters most: the mind frequently reports a device it
  * knows about without saying whether it is reachable, and rendering that as a
  * red dot is a false alarm about something that is very likely fine. Unknown
  * gets its own, quieter mark.
@@ -25,7 +25,7 @@ export function Connectors({ items }: { items: ConnectorItem[] }) {
   if (items.length === 0) {
     return (
       <p className="text-[12px] text-[var(--color-smoke)]">
-        Odin has not reported any connectors yet.
+        the mind has not reported any connectors yet.
       </p>
     )
   }

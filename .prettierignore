@@ -6,3 +6,8 @@ test-results/
 playwright-report/
 package-lock.json
 next-env.d.ts
+
+# The mind is Python and its own markdown. Prettier would reformat every
+# companion brief and knowledge document to its own taste, which is a very
+# large diff to gain nothing — those files are read by a model, not by a linter.
+mind/

@@ -1,0 +1,25 @@
+# secrets — API keys live here
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# personal data: memories, face embeddings, voiceprints, downloaded models
+data/*
+!data/demo/
+
+# macOS
+.DS_Store
+nohup.out
+node_modules/
+.venv/
+venv/
+__pycache__/
+.env
+.env.*
+*.log
+.DS_Store
+dist/
+build/

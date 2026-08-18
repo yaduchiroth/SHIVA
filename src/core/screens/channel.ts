@@ -13,7 +13,7 @@ import type { Surface } from '@/core/store/useSurfaceStore'
  *
  * Surfaces travel as plain JSON, which they are — with one exception. A stream
  * surface carries no pixels: frames arrive from the mind five to ten times a
- * second and live outside React entirely (`adapters/odin/streams`). Pushing
+ * second and live outside React entirely (`adapters/mind/streams`). Pushing
  * those through here would be absurd, so the display window opens its own bus
  * subscription for them instead.
  */

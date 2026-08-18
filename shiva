@@ -1,0 +1,53 @@
+#!/bin/bash
+# SHIVA — one command for both halves.
+#
+#   ./shiva          the mind and the face, together
+#   ./shiva mind     just the Python agent
+#   ./shiva face     just the interface
+#
+# They are separate processes on purpose. The mind holds a Claude session, a
+# microphone and a camera, and survives the interface being reloaded fifty times
+# while you work on it — which is the whole reason the link between them
+# reconnects rather than assuming.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+MIND="mind/.venv/bin/python"
+
+start_mind() {
+  if [ ! -x "$MIND" ]; then
+    echo "The mind has no environment yet. Run:  ./mind/setup.sh" >&2
+    exit 1
+  fi
+  echo "── mind ──────────────────────────────────────────────"
+  exec "$MIND" -m shiva
+}
+
+start_face() {
+  echo "── face ──────────────────────────────────────────────"
+  exec npm run dev
+}
+
+case "${1:-both}" in
+  mind) start_mind ;;
+  face) start_face ;;
+  both)
+    # The mind in the background, the face in front, and the mind torn down
+    # with it — an orphaned agent still holding the microphone is a genuinely
+    # annoying thing to discover an hour later.
+    if [ -x "$MIND" ]; then
+      "$MIND" -m shiva &
+      MIND_PID=$!
+      trap 'kill $MIND_PID 2>/dev/null || true' EXIT INT TERM
+      echo "mind started (pid $MIND_PID)"
+    else
+      echo "No mind environment — starting the interface alone."
+      echo "Run ./mind/setup.sh to add the Claude brain, companions and face recognition."
+    fi
+    npm run dev
+    ;;
+  *)
+    echo "usage: ./shiva [both|mind|face]" >&2
+    exit 2
+    ;;
+esac
