@@ -102,14 +102,66 @@ function detectCircle(trail: readonly { x: number; y: number; t: number }[]): bo
   return Math.abs(swept) > Math.PI * 1.7
 }
 
+/**
+ * The smoothing, and why these numbers.
+ *
+ * `beta` is One Euro's entire adaptive mechanism: it raises the cutoff as the
+ * signal speeds up, which is how the filter drops its lag during movement
+ * without giving up smoothing at rest. Every one of these was previously two
+ * orders of magnitude too small — 0.02 on the palm, against hand speeds of one
+ * to three normalised units per second, raised the cutoff from 1.00 Hz to
+ * 1.06 Hz. A first-order low-pass lags by 1/(2π·fc), so the filter sat at
+ * roughly 140 ms of trail at every speed, and the mechanism that exists to
+ * remove exactly that was doing nothing. It is the paper's pixel-space beta
+ * applied to normalised coordinates: derivatives in the hundreds became
+ * derivatives around one, and the constant did not follow.
+ *
+ * Exported because `tests/filterTuning.spec.ts` measures these values rather
+ * than a copy of them — the previous versions were plausible on the page and
+ * wrong in the signal, and the only defence against a repeat is a test driving
+ * the real thing.
+ *
+ * What the replacements were chosen against, all measured at inference rate:
+ *
+ *              trail @1.5 u/s     noise kept, still     noise kept, slow move
+ *   beta 0.02        138 ms                32%                   31%
+ *   beta 2.0          25 ms                33%                   54%
+ *
+ * The middle column is why raising beta looks free and is not. A still hand
+ * has almost no derivative, so beta is not engaged and the noise figure barely
+ * moves — measure only that and you would conclude there is no cost at all.
+ * The cost is in the third column: while the hand moves slowly, the raised
+ * cutoff passes more sensor noise. In absolute terms that is roughly one extra
+ * pixel of shake on a 1440-wide window, bought with 113 ms of trail, which is
+ * the right way round for a cursor you are trying to point with.
+ */
+export const PALM_FILTER = { minCutoff: 1.0, beta: 2.0 }
+/**
+ * The fingertip is the pointer, so it is tuned to sit slightly ahead of the
+ * palm rather than behind it — a tip trailing the hand it belongs to makes
+ * aiming feel like dragging something.
+ */
+export const TIP_FILTER = { minCutoff: 1.6, beta: 2.0 }
+/**
+ * Pinch and grab filter *ratios*, not positions.
+ *
+ * Thumb-to-index over palm scale travels from about 1.3 to 0.03 in the ~150 ms
+ * the gesture takes, so its derivative is nearer 8 than 1 — a different scale
+ * from the palm's, needing a different beta to reach the same place. At 0.01
+ * the gate tripped 67 ms after the fingers actually met, which is felt as the
+ * interface being slow to agree that you pinched.
+ */
+export const PINCH_FILTER = { minCutoff: 2.4, beta: 1.0 }
+export const GRAB_FILTER = { minCutoff: 2.0, beta: 1.0 }
+
 /** Per-hand filter + gate state. Kept out of the store; see handFrame.ts. */
 export class HandRecognizer {
-  private readonly palmFilter = new OneEuroVec3({ minCutoff: 1.0, beta: 0.02 })
-  private readonly tipFilter = new OneEuroVec3({ minCutoff: 1.6, beta: 0.03 })
+  private readonly palmFilter = new OneEuroVec3(PALM_FILTER)
+  private readonly tipFilter = new OneEuroVec3(TIP_FILTER)
   // Pinch needs a faster cutoff than position: it's a deliberate, quick action
   // and over-smoothing it makes selection feel unresponsive.
-  private readonly pinchFilter = new OneEuroFilter({ minCutoff: 2.4, beta: 0.01 })
-  private readonly grabFilter = new OneEuroFilter({ minCutoff: 2.0, beta: 0.01 })
+  private readonly pinchFilter = new OneEuroFilter(PINCH_FILTER)
+  private readonly grabFilter = new OneEuroFilter(GRAB_FILTER)
 
   // Every threshold below is measured, not guessed — see tests/calibrate.spec.ts,
   // which prints these ratios for a set of anatomically-proportioned poses.
